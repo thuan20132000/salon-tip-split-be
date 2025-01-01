@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.decorators import action
 from django_filters import rest_framework as django_filters
+from django.db.models import Sum
+
 from .models import (
     Staff,
     ReceiptModel,
@@ -85,18 +87,18 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
         if serializer.is_valid():
             serializer.save()
 
-            data = serializer.add_staff_receipts(request.data.get('staff_receipts'))
+            data = serializer.add_staff_receipts(
+                request.data.get('staff_receipts'))
             serializer = ReceiptModelSerializer(data, many=False)
-            
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class StaffReceiptFilter(django_filters.FilterSet):
-    created_at_from = django_filters.DateFilter(
-        field_name="created_at", lookup_expr='gte')
-    created_at_to = django_filters.DateFilter(
-        field_name="created_at", lookup_expr='lte')
+    
+    created_at = django_filters.DateFromToRangeFilter()
+    
 
     class Meta:
         model = StaffReceipt
@@ -117,3 +119,33 @@ class StaffReceiptViewSet(viewsets.ModelViewSet):
     filterset_class = StaffReceiptFilter
     search_fields = ['staff', 'receipt']
     ordering_fields = ['created_at']
+
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+
+            # Calculate total amount
+            totals = queryset.aggregate(
+                total_service_amount=Sum('service_amount'),
+                total_tip_amount=Sum('tip_amount')
+            )
+
+            # Handle None values
+            total_amount = totals.get('total_service_amount', 0)
+            total_tip = totals.get('total_tip_amount', 0)
+
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                'status': 'success',
+                'message': 'Staff receipts retrieved successfully',
+                'data': serializer.data,
+                'total_amount': total_amount,
+                'total_tip': total_tip
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)

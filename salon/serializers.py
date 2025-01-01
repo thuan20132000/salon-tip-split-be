@@ -22,6 +22,11 @@ class StaffReceiptSerializer(serializers.ModelSerializer):
         model = StaffReceipt
         fields = '__all__'
         depth = 1
+        
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['staff'] = StaffSerializer(instance.staff).data
+        return data
 
 
 class ReceiptModelSerializer(serializers.ModelSerializer):
