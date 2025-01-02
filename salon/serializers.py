@@ -57,9 +57,31 @@ class CreateReceiptModelSerializer(serializers.ModelSerializer):
             receipt.service_name = staff_receipt.get('service_name', '')
             receipt.staff_id = staff_receipt.get('staff')
             receipt.tip_amount = staff_receipt.get('tip_amount', 0)
+            receipt.discount_price = staff_receipt.get('discount_price', 0)
+            receipt.discount_percent = staff_receipt.get('discount_percent', 0)
             receipt.save()
             receipts.append(receipt)
 
         self.instance.staff_receipts.set(receipts)
 
+        return self.instance
+
+class UpdateReceiptModelSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = ReceiptModel
+        fields = '__all__'
+
+    def update_staff_receipts(self, staff_receipts: list):
+        print("staff_receipts: ", staff_receipts)
+        for staff_receipt in staff_receipts:
+            receipt = StaffReceipt.objects.get(id=staff_receipt.get('id'))
+            print("receipt::: ", receipt)
+            receipt.service_amount = staff_receipt.get('service_amount', 0)
+            receipt.service_name = staff_receipt.get('service_name', '')
+            receipt.staff_id = staff_receipt.get('staff')
+            receipt.tip_amount = staff_receipt.get('tip_amount', 0)
+            receipt.discount_price = staff_receipt.get('discount_price', 0)
+            receipt.discount_percent = staff_receipt.get('discount_percent', 0)
+            receipt.save()
         return self.instance

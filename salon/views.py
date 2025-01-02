@@ -16,7 +16,8 @@ from .serializers import (
     StaffSerializer,
     StaffReceiptSerializer,
     ReceiptModelSerializer,
-    CreateReceiptModelSerializer
+    CreateReceiptModelSerializer,
+    UpdateReceiptModelSerializer
 )
 
 
@@ -76,7 +77,6 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='create-receipt', url_name='create-receipt')
     def create_receipt(self, request):
-        print("request.data:  ", request.data)
         serializer = CreateReceiptModelSerializer(data=request.data)
 
         # add staff_receipts
@@ -93,6 +93,36 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    # update receipt
+    @action(detail=True, methods=['put'], url_path='update-receipt', url_name='update-receipt')
+    def update_receipt(self, request, pk=None):
+        try:
+            receipt = self.get_object()
+            
+            serializer = UpdateReceiptModelSerializer(receipt, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                
+                data = serializer.update_staff_receipts(
+                    request.data.get('staff_receipts'))
+                serializer = ReceiptModelSerializer(data, many=False)
+                return Response({
+                    'status': 'success',
+                    'message': 'Receipt updated successfully',
+                    'data': serializer.data
+                }, status=status.HTTP_200_OK)
+            return Response({
+                'status': 'error',
+                'message': serializer.errors,
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class StaffReceiptFilter(django_filters.FilterSet):
@@ -133,6 +163,9 @@ class StaffReceiptViewSet(viewsets.ModelViewSet):
             # Handle None values
             total_amount = totals.get('total_service_amount', 0)
             total_tip = totals.get('total_tip_amount', 0)
+            
+            # get total turn
+            total_turn = queryset.count()
 
             serializer = self.get_serializer(queryset, many=True)
             return Response({
@@ -140,7 +173,9 @@ class StaffReceiptViewSet(viewsets.ModelViewSet):
                 'message': 'Staff receipts retrieved successfully',
                 'data': serializer.data,
                 'total_amount': total_amount,
-                'total_tip': total_tip
+                'total_tip': total_tip,
+                'total_turn': total_turn,
+                
             }, status=status.HTTP_200_OK)
 
         except Exception as e:

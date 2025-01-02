@@ -54,7 +54,6 @@ class ReceiptModel(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        print(self.staff_receipts)
         return f"Receipt_id {self.id}"
 
     class Meta:
@@ -72,6 +71,9 @@ class StaffReceipt(models.Model):
     tip_amount = models.DecimalField(
         max_digits=10, decimal_places=2, default=0)
     service_name = models.CharField(max_length=100, blank=True, null=True)
+    discount_price = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0)
+    discount_percent = models.FloatField(default=0)
 
     status = models.BooleanField(
         default=True, help_text="Check this box if the service is completed"
