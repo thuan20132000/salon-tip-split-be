@@ -49,10 +49,9 @@ class StaffViewSet(viewsets.ModelViewSet):
 
 
 class ReceiptFilter(django_filters.FilterSet):
-    created_at_from = django_filters.DateFilter(
-        field_name="created_at", lookup_expr='gte')
-    created_at_to = django_filters.DateFilter(
-        field_name="created_at", lookup_expr='lte')
+    
+    created_at = django_filters.DateFromToRangeFilter()
+
 
     class Meta:
         model = ReceiptModel
