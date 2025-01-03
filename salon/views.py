@@ -51,6 +51,9 @@ class StaffViewSet(viewsets.ModelViewSet):
 class ReceiptFilter(django_filters.FilterSet):
     
     created_at = django_filters.DateFromToRangeFilter()
+    
+    created_at_exact = django_filters.DateFilter(
+        field_name="created_at", lookup_expr='exact')
 
 
     class Meta:
