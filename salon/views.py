@@ -2,22 +2,28 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, permissions, views
 from rest_framework.decorators import action
 from django_filters import rest_framework as django_filters
 from django.db.models import Sum
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import authenticate
+from .serializers import UserSerializer, LoginSerializer, RegisterSerializer
+
 
 from .models import (
     Staff,
     ReceiptModel,
-    StaffReceipt
+    StaffReceipt,
+    Salon
 )
 from .serializers import (
     StaffSerializer,
     StaffReceiptSerializer,
     ReceiptModelSerializer,
     CreateReceiptModelSerializer,
-    UpdateReceiptModelSerializer
+    UpdateReceiptModelSerializer,
+    SalonSerializer
 )
 
 
@@ -49,10 +55,10 @@ class StaffViewSet(viewsets.ModelViewSet):
 
 
 class ReceiptFilter(django_filters.FilterSet):
-    
+
     created_at = django_filters.DateFromToRangeFilter()
-    
-    created_at =  django_filters.DateFilter(
+
+    created_at = django_filters.DateFilter(
         field_name="created_at", lookup_expr='date')
 
     class Meta:
@@ -94,17 +100,18 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
     # update receipt
     @action(detail=True, methods=['put'], url_path='update-receipt', url_name='update-receipt')
     def update_receipt(self, request, pk=None):
         try:
             receipt = self.get_object()
             
-            serializer = UpdateReceiptModelSerializer(receipt, data=request.data, partial=True)
+            serializer = UpdateReceiptModelSerializer(
+                receipt, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
-                
+
                 data = serializer.update_staff_receipts(
                     request.data.get('staff_receipts'))
                 serializer = ReceiptModelSerializer(data, many=False)
@@ -127,9 +134,8 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
 
 
 class StaffReceiptFilter(django_filters.FilterSet):
-    
+
     created_at = django_filters.DateFromToRangeFilter()
-    
 
     class Meta:
         model = StaffReceipt
@@ -164,7 +170,7 @@ class StaffReceiptViewSet(viewsets.ModelViewSet):
             # Handle None values
             total_amount = totals.get('total_service_amount', 0)
             total_tip = totals.get('total_tip_amount', 0)
-            
+
             # get total turn
             total_turn = queryset.count()
 
@@ -176,7 +182,7 @@ class StaffReceiptViewSet(viewsets.ModelViewSet):
                 'total_amount': total_amount,
                 'total_tip': total_tip,
                 'total_turn': total_turn,
-                
+
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -185,3 +191,169 @@ class StaffReceiptViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SalonViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for salon management
+    """
+    permission_classes = [IsAuthenticated]
+    
+    queryset = Salon.objects.all()
+    serializer_class = SalonSerializer
+    # permission_classes = [IsAuthenticated]
+    search_fields = ['name', 'address', 'phone', 'email']
+    ordering_fields = ['name', 'address', 'phone', 'email']
+    filterset_fields = ['name', 'address', 'phone', 'email']
+    ordering = ['name', 'address', 'phone', 'email']
+    date_hierarchy = 'created_at'
+
+
+    # get salon's staffs
+
+    @action(detail=True, methods=['get'], url_path='staffs', url_name='staffs')
+    def get_staffs(self, request, pk=None):
+        try:
+            salon = self.get_object()
+            staffs = salon.staff_set.all()
+            serializer = StaffSerializer(staffs, many=True)
+            return Response({
+                'status': 'success',
+                'message': 'Staffs retrieved successfully',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # get salon's receipts
+    @action(detail=True, methods=['get'], url_path='receipts', url_name='receipts')
+    def get_receipts(self, request, pk=None):
+        try:
+            salon = self.get_object()
+            receipts = salon.receiptmodel_set.all()
+            receipts = ReceiptFilter(request.GET, queryset=receipts).qs
+            serializer = ReceiptModelSerializer(receipts, many=True)
+            return Response({
+                'status': 'success',
+                'message': 'Receipts retrieved successfully',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    # get salon's staff receipts
+    @action(detail=True, methods=['get'], url_path='staff-receipts', url_name='staff-receipts')
+    def get_staff_receipts(self, request, pk=None):
+        try:
+            salon = self.get_object()
+            staff_receipts = StaffReceipt.objects.filter(receipt__salon=salon).all()
+            serializer = StaffReceiptSerializer(staff_receipts, many=True)
+            return Response({
+                'status': 'success',
+                'message': 'Staff receipts retrieved successfully',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    # create salons' receipt
+    @action(detail=True, methods=['post'], url_path='create-receipt', url_name='create-receipt')
+    def create_receipt(self, request, pk=None):
+        try:
+            salon = self.get_object()
+            serializer = CreateReceiptModelSerializer(data=request.data)
+
+            if serializer.is_valid():
+                serializer.save(salon=salon)
+
+                data = serializer.add_staff_receipts(
+                    request.data.get('staff_receipts'))
+                serializer = ReceiptModelSerializer(data, many=False)
+
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    
+    # get owner's salons
+    @action(detail=False, methods=['get'], url_path='my-salons', url_name='my-salons')
+    def get_my_salons(self, request):
+        try:
+            user = request.user
+            salons = user.salon_set.all()
+            serializer = SalonSerializer(salons, many=True)
+            return Response({
+                'status': 'success',
+                'message': 'Salons retrieved successfully',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    
+
+
+class RegisterView(views.APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            refresh = RefreshToken.for_user(user)
+
+            return Response({
+                'user': UserSerializer(user).data,
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LoginView(views.APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        if serializer.is_valid():
+            user = authenticate(
+                username=serializer.validated_data['username'],
+                password=serializer.validated_data['password']
+            )
+
+            if user:
+                refresh = RefreshToken.for_user(user)
+                return Response({
+                    'user': UserSerializer(user).data,
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                })
+
+            return Response(
+                {'error': 'Invalid credentials'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

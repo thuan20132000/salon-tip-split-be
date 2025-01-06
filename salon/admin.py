@@ -6,14 +6,15 @@ from django.contrib import admin
 from .models import (
     Staff,
     ReceiptModel,
-    StaffReceipt
+    StaffReceipt,
+    Salon
 )
 
 
 @admin.register(Staff)
 class StaffAdmin(admin.ModelAdmin):
     list_display = ('first_name', 'last_name', 'email',
-                    'phone', 'hire_date', 'is_active')
+                    'phone', 'hire_date', 'is_active', 'salon')
     list_filter = ('is_active', 'gender', 'hire_date')
     search_fields = ('first_name', 'last_name', 'email', 'phone')
     ordering = ('-hire_date',)
@@ -21,7 +22,7 @@ class StaffAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Personal Information', {
-            'fields': ('first_name', 'last_name', 'email', 'phone', 'address', 'gender', 'date_of_birth')
+            'fields': ('first_name', 'last_name', 'email', 'phone', 'address', 'gender', 'date_of_birth','salon')
         }),
         ('Employment Details', {
             'fields': ('hire_date', 'is_active')
@@ -45,4 +46,12 @@ class StaffReceiptAdmin(admin.ModelAdmin):
     list_filter = ('staff', 'receipt')
     search_fields = ('staff', 'receipt')
     ordering = ('-created_at',)
+    date_hierarchy = 'created_at'
+
+@admin.register(Salon)
+class SalonAdmin(admin.ModelAdmin):
+    list_display = ('name', 'address', 'phone', 'email','owner')
+    list_filter = ('name', 'address', 'phone', 'email')
+    search_fields = ('name', 'address', 'phone', 'email')
+    ordering = ('name', 'address', 'phone', 'email')
     date_hierarchy = 'created_at'

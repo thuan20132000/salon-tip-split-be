@@ -3,6 +3,22 @@ from django.utils import timezone
 
 # Create your models here.
 
+class Salon(models.Model):
+    name = models.CharField(max_length=100)
+    address = models.TextField(null=True, blank=True)
+    phone = models.CharField(max_length=15, null=True, blank=True)
+    email = models.EmailField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    owner = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f'{self.name} - {self.owner}'
+
+    class Meta:
+        verbose_name = "Salon"
+        verbose_name_plural = "Salons"
+        ordering = ['-created_at']
 
 class Staff(models.Model):
     GENDER_CHOICES = (
@@ -23,6 +39,7 @@ class Staff(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    salon = models.ForeignKey(Salon, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
@@ -52,6 +69,7 @@ class ReceiptModel(models.Model):
         max_length=20, choices=PAYMENT_STATUS_CHOICES, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    salon = models.ForeignKey(Salon, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
         return f"Receipt_id {self.id}"
