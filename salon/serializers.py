@@ -7,6 +7,7 @@ from .models import (
 )
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
 
 
 class StaffSerializer(serializers.ModelSerializer):
@@ -25,7 +26,7 @@ class StaffReceiptSerializer(serializers.ModelSerializer):
         model = StaffReceipt
         fields = '__all__'
         depth = 1
-        
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['staff'] = StaffSerializer(instance.staff).data
@@ -50,7 +51,7 @@ class CreateReceiptModelSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def add_staff_receipts(self, staff_receipts: list):
-        
+
         receipts = []
         for staff_receipt in staff_receipts:
 
@@ -62,12 +63,15 @@ class CreateReceiptModelSerializer(serializers.ModelSerializer):
             receipt.tip_amount = staff_receipt.get('tip_amount', 0)
             receipt.discount_price = staff_receipt.get('discount_price', 0)
             receipt.discount_percent = staff_receipt.get('discount_percent', 0)
+            receipt.created_at = staff_receipt.get('created_at')
+            receipt.updated_at = staff_receipt.get('updated_at')
             receipt.save()
             receipts.append(receipt)
 
         self.instance.staff_receipts.set(receipts)
 
         return self.instance
+
 
 class UpdateReceiptModelSerializer(serializers.ModelSerializer):
 
@@ -76,33 +80,47 @@ class UpdateReceiptModelSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def update_staff_receipts(self, staff_receipts: list):
-        print("staff_receipts: ", staff_receipts)
         for staff_receipt in staff_receipts:
-            receipt = StaffReceipt.objects.get(id=staff_receipt.get('id'))
-            print("receipt::: ", receipt)
-            receipt.service_amount = staff_receipt.get('service_amount', 0)
-            receipt.service_name = staff_receipt.get('service_name', '')
-            receipt.tip_amount = staff_receipt.get('tip_amount', 0)
-            receipt.discount_price = staff_receipt.get('discount_price', 0)
-            receipt.discount_percent = staff_receipt.get('discount_percent', 0)
-            receipt.save()
+            staff_receipt_id = staff_receipt.get('id')
+            if staff_receipt_id:
+                receipt = StaffReceipt.objects.get(id=staff_receipt_id)
+                receipt.service_amount = staff_receipt.get('service_amount', 0)
+                receipt.service_name = staff_receipt.get('service_name', '')
+                receipt.tip_amount = staff_receipt.get('tip_amount', 0)
+                receipt.discount_price = staff_receipt.get('discount_price', 0)
+                receipt.discount_percent = staff_receipt.get(
+                    'discount_percent', 0)
+                receipt.save()
+            else:
+                receipt = StaffReceipt()
+                receipt.receipt = self.instance
+                receipt.service_amount = staff_receipt.get('service_amount', 0)
+                receipt.service_name = staff_receipt.get('service_name', '')
+                receipt.staff_id = staff_receipt.get('staff')
+                receipt.tip_amount = staff_receipt.get('tip_amount', 0)
+                receipt.discount_price = staff_receipt.get('discount_price', 0)
+                receipt.discount_percent = staff_receipt.get(
+                    'discount_percent', 0)
+                # receipt.created_at = staff_receipt.get('created_at')
+                # receipt.updated_at = staff_receipt.get('updated_at')
+
+                receipt.save()
+
         return self.instance
-    
-    
-    
+
+
 class SalonSerializer(serializers.ModelSerializer):
     class Meta:
         model = Salon
         fields = '__all__'
         depth = 1
-        
-
 
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name')
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
@@ -131,7 +149,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.save()
         return user
 
+
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True)
-

@@ -85,7 +85,6 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='create-receipt', url_name='create-receipt')
     def create_receipt(self, request):
         serializer = CreateReceiptModelSerializer(data=request.data)
-
         # add staff_receipts
         # staff_bills = request.data.get('staff_bills')
 
@@ -136,6 +135,9 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
 class StaffReceiptFilter(django_filters.FilterSet):
 
     created_at = django_filters.DateFromToRangeFilter()
+    salon = django_filters.CharFilter(
+        field_name='receipt__salon', lookup_expr='exact'
+    )
 
     class Meta:
         model = StaffReceipt
@@ -175,6 +177,7 @@ class StaffReceiptViewSet(viewsets.ModelViewSet):
             total_turn = queryset.count()
 
             serializer = self.get_serializer(queryset, many=True)
+            
             return Response({
                 'status': 'success',
                 'message': 'Staff receipts retrieved successfully',
@@ -255,11 +258,29 @@ class SalonViewSet(viewsets.ModelViewSet):
         try:
             salon = self.get_object()
             staff_receipts = StaffReceipt.objects.filter(receipt__salon=salon).all()
+            staff_receipts = StaffReceiptFilter(request.GET, queryset=staff_receipts).qs
+            
+            # Calculate total amount
+            totals = staff_receipts.aggregate(
+                total_service_amount=Sum('service_amount'),
+                total_tip_amount=Sum('tip_amount')
+            )
+            
+            # Handle None values
+            total_amount = totals.get('total_service_amount', 0)
+            total_tip = totals.get('total_tip_amount', 0)
+            
+            # get total turn
+            total_turn = staff_receipts.count()
+            
             serializer = StaffReceiptSerializer(staff_receipts, many=True)
             return Response({
                 'status': 'success',
                 'message': 'Staff receipts retrieved successfully',
-                'data': serializer.data
+                'data': serializer.data,
+                'total_amount': total_amount,
+                'total_tip': total_tip,
+                'total_turn': total_turn,
             }, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({
@@ -274,8 +295,8 @@ class SalonViewSet(viewsets.ModelViewSet):
         try:
             salon = self.get_object()
             serializer = CreateReceiptModelSerializer(data=request.data)
-
             if serializer.is_valid():
+                
                 serializer.save(salon=salon)
 
                 data = serializer.add_staff_receipts(

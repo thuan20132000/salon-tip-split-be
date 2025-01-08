@@ -85,3 +85,5 @@ yarn-error.log*
 
 # Compiled static files
 static_root/
+
+.env.prod

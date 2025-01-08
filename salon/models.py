@@ -67,8 +67,8 @@ class ReceiptModel(models.Model):
         max_digits=10, decimal_places=2, default=0)
     payment_status = models.CharField(
         max_length=20, choices=PAYMENT_STATUS_CHOICES, default='PENDING')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(default=timezone.now)
     salon = models.ForeignKey(Salon, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
@@ -97,8 +97,8 @@ class StaffReceipt(models.Model):
         default=True, help_text="Check this box if the service is completed"
     )
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
         return f"Receipt for {self.staff.first_name} {self.staff.last_name}"
