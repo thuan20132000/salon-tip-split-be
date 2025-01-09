@@ -9,6 +9,7 @@ from django.db.models import Sum
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .serializers import UserSerializer, LoginSerializer, RegisterSerializer
+from django.db.models.functions import TruncDate
 
 
 from .models import (
@@ -134,7 +135,11 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
 
 class StaffReceiptFilter(django_filters.FilterSet):
 
-    created_at = django_filters.DateFromToRangeFilter()
+    created_at_range = django_filters.DateFromToRangeFilter(
+        field_name="created_at",
+        lookup_expr='range',
+        
+    )
     created_at = django_filters.DateFilter(
         field_name="created_at", lookup_expr='date')
     salon = django_filters.CharFilter(
@@ -284,6 +289,43 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'total_tip': total_tip,
                 'total_turn': total_turn,
             }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    # get salon's staff receipts statictics by date
+    @action(detail=True, methods=['get'], url_path='staff-receipts-statistics', url_name='staff-receipts-statistics')
+    def get_staff_receipts_statistics(self, request, pk=None):
+        try:
+            # salon = self.get_object()
+            query_set = StaffReceipt.objects.filter(receipt__salon=self.get_object())
+            query_set = StaffReceiptFilter(request.GET, queryset=query_set).qs
+            query_set = query_set.annotate(
+                date=TruncDate('created_at')
+            )
+            
+            grouped_receipt = query_set.values(
+                'date',
+            )
+            
+            grouped_receipt = grouped_receipt.annotate(
+                total_service_amount=Sum('service_amount'),
+                total_tip_amount=Sum('tip_amount'),
+            ).order_by('date')
+            
+            
+            
+            
+           
+            return Response({
+                'status': 'success',
+                'message': 'Staff receipts statistics retrieved successfully',
+                'data': grouped_receipt
+            }, status=status.HTTP_200_OK)
+            
         except Exception as e:
             return Response({
                 'status': 'error',

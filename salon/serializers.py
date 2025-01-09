@@ -153,3 +153,25 @@ class RegisterSerializer(serializers.ModelSerializer):
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True)
+
+
+class StaffReceiptStatisticsSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    total_service_amount = serializers.DecimalField(
+        max_digits=10, decimal_places=2, default=0)
+    total_tip_amount = serializers.DecimalField(
+        max_digits=10, decimal_places=2, default=0)
+    total_discount_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, default=0)
+    total_discount_percent = serializers.FloatField(default=0)
+    total_receipts = serializers.IntegerField(default=0)
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['date'] = instance['date']
+        data['total_service_amount'] = instance['total_service_amount']
+        data['total_tip_amount'] = instance['total_tip_amount']
+        data['total_discount_price'] = instance['total_discount_price']
+        data['total_discount_percent'] = instance['total_discount_percent']
+        data['total_receipts'] = instance['total_receipts']
+        return data
