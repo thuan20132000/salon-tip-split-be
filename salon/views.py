@@ -135,6 +135,8 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
 class StaffReceiptFilter(django_filters.FilterSet):
 
     created_at = django_filters.DateFromToRangeFilter()
+    created_at = django_filters.DateFilter(
+        field_name="created_at", lookup_expr='date')
     salon = django_filters.CharFilter(
         field_name='receipt__salon', lookup_expr='exact'
     )
