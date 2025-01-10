@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions, views
 from rest_framework.decorators import action
 from django_filters import rest_framework as django_filters
-from django.db.models import Sum
+from django.db.models import Sum, Count
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .serializers import UserSerializer, LoginSerializer, RegisterSerializer
@@ -314,16 +314,22 @@ class SalonViewSet(viewsets.ModelViewSet):
             grouped_receipt = grouped_receipt.annotate(
                 total_service_amount=Sum('service_amount'),
                 total_tip_amount=Sum('tip_amount'),
-            ).order_by('date')
+                total_turn=Count('id'),
+            ).order_by('-date')
             
             
-            
+            summary = query_set.aggregate(
+                total_service_amount=Sum('service_amount'),
+                total_tip_amount=Sum('tip_amount'),
+                total_turn=Count('id')
+            )
             
            
             return Response({
                 'status': 'success',
                 'message': 'Staff receipts statistics retrieved successfully',
-                'data': grouped_receipt
+                'data': grouped_receipt,
+                'summary': summary
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
