@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .serializers import UserSerializer, LoginSerializer, RegisterSerializer
 from django.db.models.functions import TruncDate
-
+from services.onesignal_service import OneSignalService
 
 from .models import (
     Staff,
@@ -97,6 +97,17 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
             data = serializer.add_staff_receipts(
                 request.data.get('staff_receipts'))
             serializer = ReceiptModelSerializer(data, many=False)
+            
+            staff_receipt_string = ""
+            for staff_receipt in serializer.data['staff_receipts']:
+                staff_receipt_string += f"{staff_receipt['staff']['first_name']}, Sale: ${staff_receipt['service_amount']}, Tip: ${staff_receipt['tip_amount']} \n"
+                
+            heading= f"New receipt: {serializer.data["payment_status"]}"
+            notification = OneSignalService()
+            res = notification.send_to_all(
+                heading=heading,
+                content=staff_receipt_string
+            )
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -115,6 +126,18 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
                 data = serializer.update_staff_receipts(
                     request.data.get('staff_receipts'))
                 serializer = ReceiptModelSerializer(data, many=False)
+                
+                staff_receipt_string = ""
+                for staff_receipt in serializer.data['staff_receipts']:
+                    staff_receipt_string += f"{staff_receipt['staff']['first_name']}, Sale: ${staff_receipt['service_amount']}, Tip: ${staff_receipt['tip_amount']} \n"
+                    
+                heading= f"Update receipt: {serializer.data["payment_status"]}"
+                notification = OneSignalService()
+                res = notification.send_to_all(
+                    heading=heading,
+                    content=staff_receipt_string
+                )
+                
                 return Response({
                     'status': 'success',
                     'message': 'Receipt updated successfully',
@@ -352,7 +375,14 @@ class SalonViewSet(viewsets.ModelViewSet):
                 data = serializer.add_staff_receipts(
                     request.data.get('staff_receipts'))
                 serializer = ReceiptModelSerializer(data, many=False)
-
+                
+                notification = OneSignalService()
+                res = notification.send_to_all(
+                    heading="New Receipt",
+                    content="You have a new receipt"
+                )
+                print("Notification sent:: ",res)
+                
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
@@ -383,6 +413,23 @@ class SalonViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
             
     
+    @action(detail=False, methods=['get'], url_path='notification', url_name='notification')
+    def send_notifications(self, request):    
+        try:
+            print("send notification")
+            notification = OneSignalService()
+            res = notification.send_to_all()
+            return Response({
+                'status': 'success',
+                'message': 'Notification sent successfully',
+                'data': res
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class RegisterView(views.APIView):
