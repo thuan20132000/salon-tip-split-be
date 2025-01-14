@@ -12,3 +12,9 @@ class PaymentMethodEnums(Enum):
   GIFT_CARD = "gift_card"
   GIFT_CARD_CASH = "gift_card_cash"
   GIFT_CARD_DEBIT = "gift_card_debit"
+  
+  
+
+class UserRoleEnums(Enum):
+  STAFF =  1
+  RECEPTIONIST = 2

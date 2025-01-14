@@ -18,7 +18,7 @@ class OneSignalService:
                     content="You have a new notification",
                     data=None):
         try:
-
+            return True
             data = {'type': 'receipt'}
             notification_body = {
                 'contents': {'en': content},

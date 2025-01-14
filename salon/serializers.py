@@ -175,3 +175,8 @@ class StaffReceiptStatisticsSerializer(serializers.Serializer):
         data['total_discount_percent'] = instance['total_discount_percent']
         data['total_receipts'] = instance['total_receipts']
         return data
+    
+    
+class StaffLoginSerializer(serializers.Serializer):
+    phone = serializers.CharField()
+    password = serializers.CharField(write_only=True)

@@ -1,6 +1,9 @@
 # Create your views here.
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth.models import Group, User, Permission
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework import status, permissions, views
 from rest_framework.decorators import action
@@ -11,6 +14,14 @@ from django.contrib.auth import authenticate
 from .serializers import UserSerializer, LoginSerializer, RegisterSerializer
 from django.db.models.functions import TruncDate
 from services.onesignal_service import OneSignalService
+from django.contrib.auth import authenticate
+from salon.permissions import (
+    CanViewReceipts,
+    CanViewStaff,
+    IsSalonOwner,
+    IsSalonStaff,
+    CanDeleteStaffReceipt
+)
 
 from .models import (
     Staff,
@@ -24,7 +35,12 @@ from .serializers import (
     ReceiptModelSerializer,
     CreateReceiptModelSerializer,
     UpdateReceiptModelSerializer,
-    SalonSerializer
+    SalonSerializer,
+    StaffLoginSerializer
+)
+
+from salon.enums import (
+    UserRoleEnums
 )
 
 
@@ -49,7 +65,7 @@ class StaffViewSet(viewsets.ModelViewSet):
     """
     queryset = Staff.objects.all()
     serializer_class = StaffSerializer
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,]
     filterset_class = StaffFilter
     search_fields = ['first_name', 'last_name', 'email', 'phone']
     ordering_fields = ['first_name', 'last_name', 'hire_date', 'salary']
@@ -76,11 +92,15 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
     """
     queryset = ReceiptModel.objects.all()
     serializer_class = ReceiptModelSerializer
-    # permission_classes = [IsAuthenticated]
     filterset_class = ReceiptFilter
     search_fields = ['payment_method', 'payment_method_price']
     ordering_fields = ['created_at', 'payment_method_price']
 
+    # content_type = ContentType.objects.get_for_model(ReceiptModel)
+    # post_permission = Permission.objects.filter(content_type=content_type)
+    # print([perm.codename for perm in post_permission])
+
+    # permission_classes = [CanViewReceipts]
     # Custom action to create receipt
 
     @action(detail=False, methods=['post'], url_path='create-receipt', url_name='create-receipt')
@@ -97,12 +117,13 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
             data = serializer.add_staff_receipts(
                 request.data.get('staff_receipts'))
             serializer = ReceiptModelSerializer(data, many=False)
-            
+
             staff_receipt_string = ""
             for staff_receipt in serializer.data['staff_receipts']:
-                staff_receipt_string += f"{staff_receipt['staff']['first_name']}, Sale: ${staff_receipt['service_amount']}, Tip: ${staff_receipt['tip_amount']} \n"
-                
-            heading= f"New receipt: {serializer.data["payment_status"]}"
+                staff_receipt_string += f"{staff_receipt['staff']['first_name']}, Sale: ${
+                    staff_receipt['service_amount']}, Tip: ${staff_receipt['tip_amount']} \n"
+
+            heading = f"New receipt: {serializer.data["payment_status"]}"
             notification = OneSignalService()
             res = notification.send_to_all(
                 heading=heading,
@@ -113,11 +134,17 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     # update receipt
-    @action(detail=True, methods=['put'], url_path='update-receipt', url_name='update-receipt')
+    @action(
+        detail=True,
+        methods=['put'],
+        url_path='update-receipt',
+        url_name='update-receipt',
+        permission_classes=[IsSalonOwner]
+    )
     def update_receipt(self, request, pk=None):
         try:
             receipt = self.get_object()
-            
+
             serializer = UpdateReceiptModelSerializer(
                 receipt, data=request.data, partial=True)
             if serializer.is_valid():
@@ -126,18 +153,20 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
                 data = serializer.update_staff_receipts(
                     request.data.get('staff_receipts'))
                 serializer = ReceiptModelSerializer(data, many=False)
-                
+
                 staff_receipt_string = ""
                 for staff_receipt in serializer.data['staff_receipts']:
-                    staff_receipt_string += f"{staff_receipt['staff']['first_name']}, Sale: ${staff_receipt['service_amount']}, Tip: ${staff_receipt['tip_amount']} \n"
-                    
-                heading= f"Update receipt: {serializer.data["payment_status"]}"
+                    staff_receipt_string += f"{staff_receipt['staff']['first_name']}, Sale: ${
+                        staff_receipt['service_amount']}, Tip: ${staff_receipt['tip_amount']} \n"
+
+                heading = f"Update receipt: {
+                    serializer.data["payment_status"]}"
                 notification = OneSignalService()
                 res = notification.send_to_all(
                     heading=heading,
                     content=staff_receipt_string
                 )
-                
+
                 return Response({
                     'status': 'success',
                     'message': 'Receipt updated successfully',
@@ -155,13 +184,23 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
+    def get_permissions(self):
+        if self.action == 'list':
+            return [IsAuthenticated()]
+        if self.action == 'destroy':
+            return [IsSalonOwner()]
+        return super(ReceiptModelViewSet, self).get_permissions()
+
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
+
 
 class StaffReceiptFilter(django_filters.FilterSet):
 
     created_at_range = django_filters.DateFromToRangeFilter(
         field_name="created_at",
         lookup_expr='range',
-        
+
     )
     created_at = django_filters.DateFilter(
         field_name="created_at", lookup_expr='date')
@@ -207,7 +246,7 @@ class StaffReceiptViewSet(viewsets.ModelViewSet):
             total_turn = queryset.count()
 
             serializer = self.get_serializer(queryset, many=True)
-            
+
             return Response({
                 'status': 'success',
                 'message': 'Staff receipts retrieved successfully',
@@ -225,28 +264,49 @@ class StaffReceiptViewSet(viewsets.ModelViewSet):
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
+    def get_permissions(self):
+        if self.action == 'list':
+            return [IsAuthenticated()]
+        if self.action == 'destroy':
+            return [CanDeleteStaffReceipt()]
+        return super(StaffReceiptViewSet, self).get_permissions()
+
+    @action(
+        detail=True,
+        methods=['delete'],
+        url_path='delete',
+        url_name='delete',
+        permission_classes=[CanDeleteStaffReceipt]
+    )
+    def delete_staff_receipt(self, request, *args, **kwargs):
+        print("destroy")
+        return super().destroy(self, request, *args, **kwargs)
+
 
 class SalonViewSet(viewsets.ModelViewSet):
     """
     API endpoint for salon management
     """
-    permission_classes = [IsAuthenticated]
-    
+
     queryset = Salon.objects.all()
     serializer_class = SalonSerializer
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
     search_fields = ['name', 'address', 'phone', 'email']
     ordering_fields = ['name', 'address', 'phone', 'email']
     filterset_fields = ['name', 'address', 'phone', 'email']
     ordering = ['name', 'address', 'phone', 'email']
     date_hierarchy = 'created_at'
-
-
     # get salon's staffs
 
-    @action(detail=True, methods=['get'], url_path='staffs', url_name='staffs')
+    @action(
+        detail=True,
+        methods=['get'],
+        url_path='staffs',
+        url_name='staffs',
+    )
     def get_staffs(self, request, pk=None):
         try:
+            print("get staffs")
             salon = self.get_object()
             staffs = salon.staff_set.all()
             serializer = StaffSerializer(staffs, many=True)
@@ -267,7 +327,14 @@ class SalonViewSet(viewsets.ModelViewSet):
     def get_receipts(self, request, pk=None):
         try:
             salon = self.get_object()
-            receipts = salon.receiptmodel_set.all()
+            if salon.owner == request.user:
+                receipts = salon.receiptmodel_set.all()
+            else:
+                receipts = ReceiptModel.objects.filter(
+                    salon=salon, staff_receipts__staff=request.user.staff)
+                print("staff receipts: ", receipts)
+
+            # receipts = salon.receiptmodel_set.all()
             receipts = ReceiptFilter(request.GET, queryset=receipts).qs
             serializer = ReceiptModelSerializer(receipts, many=True)
             return Response({
@@ -281,28 +348,41 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+
     # get salon's staff receipts
     @action(detail=True, methods=['get'], url_path='staff-receipts', url_name='staff-receipts')
     def get_staff_receipts(self, request, pk=None):
         try:
             salon = self.get_object()
-            staff_receipts = StaffReceipt.objects.filter(receipt__salon=salon).all()
-            staff_receipts = StaffReceiptFilter(request.GET, queryset=staff_receipts).qs
-            
+            if IsAdminUser and salon.owner == request.user:
+                staff_receipts = StaffReceipt.objects.filter(
+                    receipt__salon=salon).all()
+            elif request.user.staff.role.id == 2:
+                staff_receipts = StaffReceipt.objects.filter(
+                    receipt__salon=salon).all()
+            else:
+                staff_receipts = StaffReceipt.objects.filter(
+                    receipt__salon=salon,
+                    staff=request.user.staff
+                )
+                print("staff receipts: ", staff_receipts)
+
+            staff_receipts = StaffReceiptFilter(
+                request.GET, queryset=staff_receipts).qs
+
             # Calculate total amount
             totals = staff_receipts.aggregate(
                 total_service_amount=Sum('service_amount'),
                 total_tip_amount=Sum('tip_amount')
             )
-            
+
             # Handle None values
             total_amount = totals.get('total_service_amount', 0)
             total_tip = totals.get('total_tip_amount', 0)
-            
+
             # get total turn
             total_turn = staff_receipts.count()
-            
+
             serializer = StaffReceiptSerializer(staff_receipts, many=True)
             return Response({
                 'status': 'success',
@@ -318,50 +398,62 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+
     # get salon's staff receipts statictics by date
-    @action(detail=True, methods=['get'], url_path='staff-receipts-statistics', url_name='staff-receipts-statistics')
+    @action(
+        detail=True,
+        methods=['get'],
+        url_path='staff-receipts-statistics',
+        url_name='staff-receipts-statistics',
+    )
     def get_staff_receipts_statistics(self, request, pk=None):
         try:
-            # salon = self.get_object()
-            query_set = StaffReceipt.objects.filter(receipt__salon=self.get_object())
+            salon = self.get_object()
+
+            if salon.owner == request.user:
+                query_set = StaffReceipt.objects.filter(
+                    receipt__salon=salon).all()
+            else:
+                query_set = StaffReceipt.objects.filter(
+                    receipt__salon=salon,
+                    staff=request.user.staff
+                )
+
             query_set = StaffReceiptFilter(request.GET, queryset=query_set).qs
             query_set = query_set.annotate(
                 date=TruncDate('created_at')
             )
-            
+
             grouped_receipt = query_set.values(
                 'date',
             )
-            
+
             grouped_receipt = grouped_receipt.annotate(
                 total_service_amount=Sum('service_amount'),
                 total_tip_amount=Sum('tip_amount'),
                 total_turn=Count('id'),
             ).order_by('-date')
-            
-            
+
             summary = query_set.aggregate(
                 total_service_amount=Sum('service_amount'),
                 total_tip_amount=Sum('tip_amount'),
                 total_turn=Count('id')
             )
-            
-           
+
             return Response({
                 'status': 'success',
                 'message': 'Staff receipts statistics retrieved successfully',
                 'data': grouped_receipt,
                 'summary': summary
             }, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
             return Response({
                 'status': 'error',
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+
     # create salons' receipt
     @action(detail=True, methods=['post'], url_path='create-receipt', url_name='create-receipt')
     def create_receipt(self, request, pk=None):
@@ -369,20 +461,20 @@ class SalonViewSet(viewsets.ModelViewSet):
             salon = self.get_object()
             serializer = CreateReceiptModelSerializer(data=request.data)
             if serializer.is_valid():
-                
+
                 serializer.save(salon=salon)
 
                 data = serializer.add_staff_receipts(
                     request.data.get('staff_receipts'))
                 serializer = ReceiptModelSerializer(data, many=False)
-                
-                notification = OneSignalService()
-                res = notification.send_to_all(
-                    heading="New Receipt",
-                    content="You have a new receipt"
-                )
-                print("Notification sent:: ",res)
-                
+
+                # notification = OneSignalService()
+                # res = notification.send_to_all(
+                #     heading="New Receipt",
+                #     content="You have a new receipt"
+                # )
+                # print("Notification sent:: ",res)
+
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
@@ -392,9 +484,15 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
-    
     # get owner's salons
-    @action(detail=False, methods=['get'], url_path='my-salons', url_name='my-salons')
+
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='my-salons',
+        url_name='my-salons',
+        permission_classes=[IsAuthenticated]
+    )
     def get_my_salons(self, request):
         try:
             user = request.user
@@ -411,10 +509,9 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
-            
-    
+
     @action(detail=False, methods=['get'], url_path='notification', url_name='notification')
-    def send_notifications(self, request):    
+    def send_notifications(self, request):
         try:
             print("send notification")
             notification = OneSignalService()
@@ -475,3 +572,32 @@ class LoginView(views.APIView):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # staff login
+    # @action(detail=False, methods=['post'], url_path='staff-login', url_name='staff-login')
+    # def staff_login(self, request):
+    #     try:
+    #         serializer = StaffLoginSerializer(data=request.GET)
+    #         print("staff login:: ",serializer.data)
+
+    #         if serializer.is_valid():
+    #             username = request.GET.get('username')
+    #             password = request.GET.get('password')
+    #             user = authenticate(username=username, password=password)
+    #             if user:
+    #                 refresh = RefreshToken.for_user(user)
+    #                 return Response({
+    #                     'user': UserSerializer(user).data,
+    #                     'refresh': str(refresh),
+    #                     'access': str(refresh.access_token),
+    #                 })
+    #         return Response(
+    #             {'error': 'Invalid credentials'},
+    #             status=status.HTTP_401_UNAUTHORIZED
+    #         )
+    #     except Exception as e:
+    #         return Response({
+    #             'status': 'error',
+    #             'message': str(e),
+    #             'data': None
+    #         }, status=status.HTTP_400_BAD_REQUEST)

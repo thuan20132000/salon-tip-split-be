@@ -7,14 +7,15 @@ from .models import (
     Staff,
     ReceiptModel,
     StaffReceipt,
-    Salon
+    Salon,
+    StaffRoleModels
 )
 
 
 @admin.register(Staff)
 class StaffAdmin(admin.ModelAdmin):
     list_display = ('first_name', 'last_name', 'email',
-                    'phone', 'hire_date', 'is_active', 'salon')
+                    'phone', 'hire_date', 'is_active', 'salon', 'role')
     list_filter = ('is_active', 'gender', 'hire_date')
     search_fields = ('first_name', 'last_name', 'email', 'phone')
     ordering = ('-hire_date',)
@@ -22,7 +23,7 @@ class StaffAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Personal Information', {
-            'fields': ('first_name', 'last_name', 'email', 'phone', 'address', 'gender', 'date_of_birth','salon')
+            'fields': ('first_name', 'last_name', 'email', 'phone', 'address', 'gender', 'date_of_birth','salon', 'role')
         }),
         ('Employment Details', {
             'fields': ('hire_date', 'is_active')
@@ -55,3 +56,12 @@ class SalonAdmin(admin.ModelAdmin):
     search_fields = ('name', 'address', 'phone', 'email')
     ordering = ('name', 'address', 'phone', 'email')
     date_hierarchy = 'created_at'
+    
+    
+@admin.register(StaffRoleModels)
+class StaffRoleModelsAdmin(admin.ModelAdmin):
+    list_display = ('title', 'description')
+    search_fields = ('title', 'description')
+    ordering = ('title', 'description')
+    date_hierarchy = 'created_at'
+    
