@@ -8,10 +8,12 @@ from rest_framework.response import Response
 from rest_framework import status, permissions, views
 from rest_framework.decorators import action
 from django_filters import rest_framework as django_filters
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, F, DecimalField
+from django.db.models.functions import Cast
+
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
-from .serializers import UserSerializer, LoginSerializer, RegisterSerializer
+from .serializers import UserSerializer, LoginSerializer, RegisterSerializer, StaffSerializer
 from django.db.models.functions import TruncDate
 from services.onesignal_service import OneSignalService
 from django.contrib.auth import authenticate
@@ -20,14 +22,16 @@ from salon.permissions import (
     CanViewStaff,
     IsSalonOwner,
     IsSalonStaff,
-    CanDeleteStaffReceipt
+    CanDeleteStaffReceipt,
+    CanViewSalonSalaryReport
 )
 
 from .models import (
     Staff,
     ReceiptModel,
     StaffReceipt,
-    Salon
+    Salon,
+    UserDeviceModel
 )
 from .serializers import (
     StaffSerializer,
@@ -36,12 +40,17 @@ from .serializers import (
     CreateReceiptModelSerializer,
     UpdateReceiptModelSerializer,
     SalonSerializer,
-    StaffLoginSerializer
+    StaffLoginSerializer,
+    UserDeviceModelSerializer,
+    SalonStaffSerializer
 )
 
 from salon.enums import (
-    UserRoleEnums
+    UserRoleEnums,
+    PaymentStatusEnums
 )
+
+import json
 
 
 class StaffFilter(django_filters.FilterSet):
@@ -105,33 +114,56 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='create-receipt', url_name='create-receipt')
     def create_receipt(self, request):
-        serializer = CreateReceiptModelSerializer(data=request.data)
-        # add staff_receipts
-        # staff_bills = request.data.get('staff_bills')
 
-        # print("staff_bills:  ", staff_bills)
+        try:
+            # comment:
+            serializer = CreateReceiptModelSerializer(data=request.data)
 
-        if serializer.is_valid():
-            serializer.save()
+            if serializer.is_valid():
+                serializer.save()
 
-            data = serializer.add_staff_receipts(
-                request.data.get('staff_receipts'))
-            serializer = ReceiptModelSerializer(data, many=False)
+                data = serializer.add_staff_receipts(
+                    request.data.get('staff_receipts'))
+                serializer = ReceiptModelSerializer(data, many=False)
 
-            staff_receipt_string = ""
-            for staff_receipt in serializer.data['staff_receipts']:
-                staff_receipt_string += f"{staff_receipt['staff']['first_name']}, Sale: ${
-                    staff_receipt['service_amount']}, Tip: ${staff_receipt['tip_amount']} \n"
+                print("serializer data: ", serializer.data)
+                staff_ids = [item['staff']['id']
+                             for item in serializer.data['staff_receipts']]
+                owner_id = serializer.data['salon']['owner']['id']
+                staff_ids.append(owner_id)
 
-            heading = f"New receipt: {serializer.data["payment_status"]}"
-            notification = OneSignalService()
-            res = notification.send_to_all(
-                heading=heading,
-                content=staff_receipt_string
-            )
+                print("user_ids: ", staff_ids)
+                user_device_ids = UserDeviceModel.objects.filter(
+                    user__id__in=staff_ids
+                ).values('device_id')
 
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                user_device_ids = [item['device_id']
+                                   for item in user_device_ids]
+                print("user_device_ids: ", user_device_ids)
+
+                notification_string = ""
+                for staff_receipt in serializer.data['staff_receipts']:
+                    notification_string += f"{
+                        staff_receipt['staff']['first_name']} - "
+                    notification_string += f"Sale: ${
+                        staff_receipt['service_amount']} - "
+                    notification_string += f"Tip: ${
+                        staff_receipt['tip_amount']} \n"
+
+                heading = f"New receipt: {serializer.data["payment_status"]}"
+                notification = OneSignalService()
+
+                notification.send_notification_by_ids(
+                    heading=heading,
+                    content=notification_string,
+                    player_ids=user_device_ids
+                )
+
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # end try
 
     # update receipt
     @action(
@@ -306,10 +338,13 @@ class SalonViewSet(viewsets.ModelViewSet):
     )
     def get_staffs(self, request, pk=None):
         try:
-            print("get staffs")
-            salon = self.get_object()
-            staffs = salon.staff_set.all()
-            serializer = StaffSerializer(staffs, many=True)
+            staff = request.user.staff
+            staff_salon = staff.salon
+
+            print("staff_salon: ", staff_salon)
+
+            staffs = self.get_object().staff_set.all()
+            serializer = SalonStaffSerializer(staffs, many=True)
             return Response({
                 'status': 'success',
                 'message': 'Staffs retrieved successfully',
@@ -356,14 +391,14 @@ class SalonViewSet(viewsets.ModelViewSet):
             salon = self.get_object()
             if IsAdminUser and salon.owner == request.user:
                 staff_receipts = StaffReceipt.objects.filter(
-                    receipt__salon=salon).all()
-            elif request.user.staff.role.id == 2:
-                staff_receipts = StaffReceipt.objects.filter(
-                    receipt__salon=salon).all()
+                    receipt__salon=salon,
+                    receipt__payment_status=PaymentStatusEnums.PAID.value,
+                ).all()
             else:
                 staff_receipts = StaffReceipt.objects.filter(
                     receipt__salon=salon,
-                    staff=request.user.staff
+                    receipt__payment_status=PaymentStatusEnums.PAID.value,
+                    staff=request.user.staff,
                 )
                 print("staff receipts: ", staff_receipts)
 
@@ -412,11 +447,14 @@ class SalonViewSet(viewsets.ModelViewSet):
 
             if salon.owner == request.user:
                 query_set = StaffReceipt.objects.filter(
-                    receipt__salon=salon).all()
+                    receipt__salon=salon,
+                    receipt__payment_status=PaymentStatusEnums.PAID.value,
+                ).all()
             else:
                 query_set = StaffReceipt.objects.filter(
                     receipt__salon=salon,
-                    staff=request.user.staff
+                    staff=request.user.staff,
+                    receipt__payment_status=PaymentStatusEnums.PAID.value,
                 )
 
             query_set = StaffReceiptFilter(request.GET, queryset=query_set).qs
@@ -454,7 +492,72 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
+    # get staff revenue statistics
+    @action(
+        detail=True,
+        methods=['get'],
+        url_path='staff-service-revenue',
+        url_name='staff-service-revenue',
+        permission_classes=[IsAuthenticated, CanViewSalonSalaryReport]
+    )
+    def get_staff_service_revenue(self, request, pk=None):
+        try:
+            salon = self.get_object()
+
+            if salon.owner == request.user:
+                query_set = StaffReceipt.objects.filter(
+                    receipt__salon=salon,
+                    receipt__payment_status=PaymentStatusEnums.PAID.value,
+                ).all()
+            else:
+                query_set = StaffReceipt.objects.filter(
+                    receipt__salon=salon,
+                    staff=request.user.staff,
+                    receipt__payment_status=PaymentStatusEnums.PAID.value,
+                )
+
+            query_set = StaffReceiptFilter(request.GET, queryset=query_set).qs
+            query_set = query_set.annotate(
+                date=TruncDate('created_at')
+            )
+
+            grouped_receipt = query_set.values(
+                'staff_id',
+                'staff__first_name',
+                'staff__commission_rate',
+                'date',
+            )
+
+            grouped_receipt = grouped_receipt.annotate(
+                total_service_amount=Sum('service_amount'),
+                total_tip_amount=Sum('tip_amount'),
+                total_turn=Count('id'),
+                service_revenue=Cast(F('total_service_amount') * F('staff__commission_rate'),
+                                 DecimalField(max_digits=10, decimal_places=2))
+            ).order_by('-date')
+
+            summary = query_set.aggregate(
+                total_service_amount=Sum('service_amount'),
+                total_tip_amount=Sum('tip_amount'),
+                total_turn=Count('id')
+            )
+
+            return Response({
+                'status': 'success',
+                'message': 'Staff revenue statistics retrieved successfully',
+                'data': grouped_receipt,
+                'summary': summary
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
     # create salons' receipt
+
     @action(detail=True, methods=['post'], url_path='create-receipt', url_name='create-receipt')
     def create_receipt(self, request, pk=None):
         try:
@@ -560,11 +663,20 @@ class LoginView(views.APIView):
 
             if user:
                 refresh = RefreshToken.for_user(user)
-                return Response({
-                    'user': UserSerializer(user).data,
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                })
+
+                if user:
+                    return Response({
+                        # 'user': UserSerializer(user).data,
+                        'user': UserSerializer(user).data,
+                        'refresh': str(refresh),
+                        'access': str(refresh.access_token),
+                    })
+                else:
+                    return Response({
+                        'user': UserSerializer(user).data,
+                        'refresh': str(refresh),
+                        'access': str(refresh.access_token),
+                    })
 
             return Response(
                 {'error': 'Invalid credentials'},
@@ -601,3 +713,111 @@ class LoginView(views.APIView):
     #             'message': str(e),
     #             'data': None
     #         }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserDeviceViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for user device management
+    """
+    queryset = UserDeviceModel.objects.all()
+    serializer_class = UserDeviceModelSerializer
+    permission_classes = [IsAuthenticated]
+    search_fields = ['user', 'device_id']
+    ordering_fields = ['created_at']
+
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                'status': 'success',
+                'message': 'User devices retrieved successfully',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='register-device',
+    )
+    def register_device(self, request):
+        try:
+            print("register device")
+
+            user = request.user
+            print("user: ", user)
+            print("request data: ", request.data)
+            user_device = user.devices.create(**request.data)
+
+            serializer = UserDeviceModelSerializer(user_device)
+
+            return Response({
+                'status': 'success',
+                'message': 'Device registered successfully',
+                'data': serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='unregister-device',
+    )
+    def unregister_device(self, request):
+        try:
+            print("unregister device")
+            device_id = request.data.get('device_id')
+            user_device = UserDeviceModel.objects.get(device_id=device_id)
+            user_device.delete()
+
+            return Response({
+                'status': 'success',
+                'message': 'Device unregistered successfully',
+                'data': None
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='send-notification',
+    )
+    def send_notification(self, request):
+        try:
+            notification = OneSignalService()
+            device_ids = request.data.get('device_ids')
+            print("send notification:: ", type(device_ids))
+            # string to list
+            device_ids_list = json.loads(device_ids)
+            print("device_ids_list: ", device_ids)
+
+            res = notification.send_notification_by_ids(device_ids_list)
+            return Response({
+                'status': 'success',
+                'message': 'Notification sent successfully',
+                'data': res
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)

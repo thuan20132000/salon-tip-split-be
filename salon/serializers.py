@@ -3,7 +3,8 @@ from .models import (
     Staff,
     StaffReceipt,
     ReceiptModel,
-    Salon
+    Salon,
+    UserDeviceModel
 )
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
@@ -115,12 +116,60 @@ class SalonSerializer(serializers.ModelSerializer):
         fields = '__all__'
         depth = 1
 
+class StaffSalonSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = Salon
+        fields = '__all__'
 
 class UserSerializer(serializers.ModelSerializer):
+    
+    staff_detail = serializers.SerializerMethodField()
+    
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name')
+        fields = ('id', 'username', 'email', 'first_name', 'last_name','staff_detail')
 
+    def get_staff_detail(self, obj):
+        if(hasattr(obj, 'staff')):
+            return StaffDetailSerializer(obj.staff).data
+
+class StaffDetailSerializer(serializers.ModelSerializer):
+    
+    salon = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Staff
+        fields = '__all__'
+    
+    def get_salon(self,obj):
+        if(hasattr(obj,'salon')):
+            return StaffSalonSerializer(obj.salon).data
+
+class SalonStaffSerializer(serializers.ModelSerializer):
+    
+    salon = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Staff
+        fields = '__all__'
+    
+    def get_salon(self,obj):
+        if(hasattr(obj,'salon')):
+            return StaffSalonSerializer(obj.salon).data
+   
+
+
+class StaffSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Staff
+        fields = '__all__'
+        depth = 1
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['salon'] = SalonSerializer(instance.salon).data
+        return data
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
@@ -165,7 +214,7 @@ class StaffReceiptStatisticsSerializer(serializers.Serializer):
         max_digits=10, decimal_places=2, default=0)
     total_discount_percent = serializers.FloatField(default=0)
     total_receipts = serializers.IntegerField(default=0)
-    
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['date'] = instance['date']
@@ -175,8 +224,14 @@ class StaffReceiptStatisticsSerializer(serializers.Serializer):
         data['total_discount_percent'] = instance['total_discount_percent']
         data['total_receipts'] = instance['total_receipts']
         return data
-    
-    
+
+
 class StaffLoginSerializer(serializers.Serializer):
     phone = serializers.CharField()
     password = serializers.CharField(write_only=True)
+
+
+class UserDeviceModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserDeviceModel
+        fields = '__all__'

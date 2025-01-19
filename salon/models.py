@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from salon.enums import UserRoleEnums
 # Create your models here.
 
+
 class Salon(models.Model):
     name = models.CharField(max_length=100)
     address = models.TextField(null=True, blank=True)
@@ -11,7 +12,8 @@ class Salon(models.Model):
     email = models.EmailField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    owner = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+    owner = models.ForeignKey(
+        User, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
         return f'{self.name} - {self.owner}'
@@ -21,14 +23,25 @@ class Salon(models.Model):
         verbose_name_plural = "Salons"
         ordering = ['-created_at']
 
-class StaffRoleModels(models.Model):
+# class StaffRole(models.Model):
+#     title = models.CharField(max_length=100)
+#     description = models.TextField(blank=True, null=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+
+#     def __str__(self):
+#         return self.title
+
+
+class Role(models.Model):
     title = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     def __str__(self):
         return self.title
+
 
 class Staff(models.Model):
     GENDER_CHOICES = (
@@ -36,7 +49,7 @@ class Staff(models.Model):
         ('F', 'Female'),
         ('O', 'Other'),
     )
-    
+
     first_name = models.CharField(max_length=100, blank=True, null=True)
     last_name = models.CharField(max_length=100, blank=True, null=True)
     email = models.EmailField(unique=True, blank=True, null=True)
@@ -49,14 +62,18 @@ class Staff(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    salon = models.ForeignKey(Salon, on_delete=models.CASCADE, null=True, blank=True)
+    salon = models.ForeignKey(
+        Salon, on_delete=models.CASCADE, null=True, blank=True)
     user = models.OneToOneField(
-        User, on_delete=models.CASCADE, null=True, blank=True
+        User, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='staff'
     )
-    
-    role = models.ForeignKey(StaffRoleModels, on_delete=models.CASCADE, null=True, blank=True)
 
-    
+    commission_rate = models.FloatField(default=0, null=True, blank=True)
+
+    role = models.ForeignKey(
+        Role, on_delete=models.SET_NULL, null=True, blank=True, related_name='role')
+
     def save(self, *args, **kwargs):
         # Create User instance if not exists
         if not self.user and self.phone:
@@ -67,16 +84,15 @@ class Staff(models.Model):
                 first_name=self.first_name,
                 last_name=self.last_name or ''
             )
-            user.set_password(self.phone)  # Set default password as phone number
+            user.set_password("123456")  # Set default password as phone number
             user.save()
             self.user = user
-        
+
         if not self.role:
-            self.role = StaffRoleModels.objects.get(id=UserRoleEnums.STAFF.value)
-            
+            role = Role.objects.get(title=UserRoleEnums.STAFF.value)
+            self.role = role
+
         super().save(*args, **kwargs)
-
-
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
@@ -106,7 +122,13 @@ class ReceiptModel(models.Model):
         max_length=20, choices=PAYMENT_STATUS_CHOICES, default='PENDING')
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(default=timezone.now)
-    salon = models.ForeignKey(Salon, on_delete=models.CASCADE, null=True, blank=True)
+    salon = models.ForeignKey(
+        Salon, on_delete=models.CASCADE, null=True, blank=True)
+    total_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0, null=True, blank=True)
+    custom_discount = models.FloatField(default=0)
+    bonus_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0, null=True, blank=True)
 
     def __str__(self):
         return f"Receipt_id {self.id}"
@@ -143,4 +165,24 @@ class StaffReceipt(models.Model):
     class Meta:
         verbose_name = "Staff Receipt"
         verbose_name_plural = "Staff Receipts"
+        ordering = ['-created_at']
+
+
+class UserDeviceModel(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='devices')
+    device_id = models.CharField(
+        max_length=100, blank=True, null=True, unique=True)
+    device_type = models.CharField(max_length=20, blank=True, null=True)
+    active = models.BooleanField(default=True)
+    last_used = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.device_id}"
+
+    class Meta:
+        verbose_name = "User Device"
+        verbose_name_plural = "User Devices"
         ordering = ['-created_at']

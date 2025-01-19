@@ -16,5 +16,10 @@ class PaymentMethodEnums(Enum):
   
 
 class UserRoleEnums(Enum):
-  STAFF =  1
-  RECEPTIONIST = 2
+  STAFF =  "Staff"
+  RECEPTIONIST = "Receptionist"
+
+
+class PaymentStatusEnums(Enum):
+  PAID = "PAID"
+  PENDING = "PENDING"

@@ -8,7 +8,7 @@ router.register(r'staff', views.StaffViewSet)
 router.register(r'staff-receipt', views.StaffReceiptViewSet)
 router.register(r'receipt', views.ReceiptModelViewSet)
 router.register(r'salons', views.SalonViewSet)
-
+router.register(r'user-devices', views.UserDeviceViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

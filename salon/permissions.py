@@ -71,29 +71,46 @@ class IsSalonOwner(permissions.BasePermission):
 
     def has_permission(self, request, view):
         return super().has_permission(request, view)
-  
+
     def has_object_permission(self, request, view, obj):
 
         user = request.user
+
         receipt_salon = obj.salon
         receipt_salon_owner = receipt_salon.owner
-        
+
         return bool(
             user and
             receipt_salon_owner == user
         )
+
+
+class CanViewSalonSalaryReport(permissions.BasePermission):
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        # receipt_salon_owner = obj.receipt.salon.owner
+        print("obj", obj.owner_id)
+
+        return (
+            bool(user and
+                 obj.owner_id == user.id)
+        )
+
+
 class CanDeleteStaffReceipt(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         user = request.user
         receipt_salon_owner = obj.receipt.salon.owner
+
         return bool(
             user and
             receipt_salon_owner == user
         )
 
+
 class IsSalonStaff(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
-        
+
         user = request.user
         salon = obj
         return False

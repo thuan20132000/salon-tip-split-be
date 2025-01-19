@@ -33,3 +33,31 @@ class OneSignalService:
         except Exception as e:
             print(f"Error sending notification: {str(e)}")
             return None
+
+    
+    def send_notification_by_ids(
+        self,
+        player_ids,
+        heading="New Notification",
+        content="You have a new notification",
+        data=None
+    ):
+        try:
+            # return False
+            data = {'type': 'receipt'}
+            notification_body = {
+                'contents': {'en': content},
+                'headings': {'en': heading},
+                'data': data or {},
+                'include_player_ids': player_ids
+            }
+
+            response = self.client.send_notification(notification_body)
+            
+            print(response.body)
+            
+            return None
+
+        except Exception as e:
+            print(f"Error sending notification: {str(e)}")
+            return None
