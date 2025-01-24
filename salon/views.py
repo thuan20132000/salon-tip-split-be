@@ -52,7 +52,6 @@ from salon.enums import (
 
 import json
 
-
 class StaffFilter(django_filters.FilterSet):
     hire_date_from = django_filters.DateFilter(
         field_name="hire_date", lookup_expr='gte')
@@ -82,10 +81,15 @@ class StaffViewSet(viewsets.ModelViewSet):
 
 class ReceiptFilter(django_filters.FilterSet):
 
-    created_at = django_filters.DateFromToRangeFilter()
+    created_at_range = django_filters.DateFromToRangeFilter()
 
     created_at = django_filters.DateFilter(
         field_name="created_at", lookup_expr='date')
+    
+    staff = django_filters.CharFilter(
+        field_name='staff_receipts__staff', lookup_expr='exact'
+    )
+    
 
     class Meta:
         model = ReceiptModel
@@ -112,6 +116,47 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
     # permission_classes = [CanViewReceipts]
     # Custom action to create receipt
 
+    def send_create_receipt_notification(self, salon_receipt):
+
+        try:
+            # comment:
+            staff_receipts = salon_receipt['staff_receipts']
+            
+            notification_string = ""
+            user_ids = []
+            owner_id = salon_receipt['salon']['owner']
+            user_ids.append(owner_id)
+            
+
+            for staff_receipt in staff_receipts:
+                user_ids.append(staff_receipt['user']['id'])
+                notification_string += f"{
+                    staff_receipt['user']['first_name']} - "
+                notification_string += f"Sale: ${
+                    staff_receipt['service_amount']} - "
+                notification_string += f"Tip: ${staff_receipt['tip_amount']} \n"
+            
+            
+            user_device_ids = UserDeviceModel.objects.filter(
+                user__id__in=user_ids,
+                device_id__isnull=False
+            ).values('device_id')
+            device_ids = [item['device_id'] for item in user_device_ids]
+            
+            heading = f"New receipt: {salon_receipt["payment_status"]}"
+            notification = OneSignalService()
+
+            notification.send_notification_by_ids(
+                heading=heading,
+                content=notification_string,
+                player_ids=device_ids)
+            
+        except Exception as e:
+            print(f"Error sending notification: {str(e)}")
+            return None
+        # end try
+        # )
+
     @action(detail=False, methods=['post'], url_path='create-receipt', url_name='create-receipt')
     def create_receipt(self, request):
 
@@ -126,38 +171,8 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
                     request.data.get('staff_receipts'))
                 serializer = ReceiptModelSerializer(data, many=False)
 
-                print("serializer data: ", serializer.data)
-                staff_ids = [item['staff']['id']
-                             for item in serializer.data['staff_receipts']]
-                owner_id = serializer.data['salon']['owner']['id']
-                staff_ids.append(owner_id)
-
-                print("user_ids: ", staff_ids)
-                user_device_ids = UserDeviceModel.objects.filter(
-                    user__id__in=staff_ids
-                ).values('device_id')
-
-                user_device_ids = [item['device_id']
-                                   for item in user_device_ids]
-                print("user_device_ids: ", user_device_ids)
-
-                notification_string = ""
-                for staff_receipt in serializer.data['staff_receipts']:
-                    notification_string += f"{
-                        staff_receipt['staff']['first_name']} - "
-                    notification_string += f"Sale: ${
-                        staff_receipt['service_amount']} - "
-                    notification_string += f"Tip: ${
-                        staff_receipt['tip_amount']} \n"
-
-                heading = f"New receipt: {serializer.data["payment_status"]}"
-                notification = OneSignalService()
-
-                notification.send_notification_by_ids(
-                    heading=heading,
-                    content=notification_string,
-                    player_ids=user_device_ids
-                )
+                
+                self.send_create_receipt_notification(salon_receipt=serializer.data)
 
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -186,18 +201,7 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
                     request.data.get('staff_receipts'))
                 serializer = ReceiptModelSerializer(data, many=False)
 
-                staff_receipt_string = ""
-                for staff_receipt in serializer.data['staff_receipts']:
-                    staff_receipt_string += f"{staff_receipt['staff']['first_name']}, Sale: ${
-                        staff_receipt['service_amount']}, Tip: ${staff_receipt['tip_amount']} \n"
-
-                heading = f"Update receipt: {
-                    serializer.data["payment_status"]}"
-                notification = OneSignalService()
-                res = notification.send_to_all(
-                    heading=heading,
-                    content=staff_receipt_string
-                )
+                self.send_create_receipt_notification(salon_receipt=serializer.data)
 
                 return Response({
                     'status': 'success',
@@ -363,14 +367,17 @@ class SalonViewSet(viewsets.ModelViewSet):
         try:
             salon = self.get_object()
             if salon.owner == request.user:
-                receipts = salon.receiptmodel_set.all()
+                receipts = ReceiptModel.objects.filter(
+                    salon=salon)
+                receipts = ReceiptFilter(request.GET, queryset=receipts).qs
             else:
                 receipts = ReceiptModel.objects.filter(
-                    salon=salon, staff_receipts__staff=request.user.staff)
-                print("staff receipts: ", receipts)
+                    salon=salon, 
+                    staff_receipts__staff=request.user.staff,
+                )
+            
 
             # receipts = salon.receiptmodel_set.all()
-            receipts = ReceiptFilter(request.GET, queryset=receipts).qs
             serializer = ReceiptModelSerializer(receipts, many=True)
             return Response({
                 'status': 'success',
@@ -533,7 +540,7 @@ class SalonViewSet(viewsets.ModelViewSet):
                 total_tip_amount=Sum('tip_amount'),
                 total_turn=Count('id'),
                 service_revenue=Cast(F('total_service_amount') * F('staff__commission_rate'),
-                                 DecimalField(max_digits=10, decimal_places=2))
+                                     DecimalField(max_digits=10, decimal_places=2))
             ).order_by('-date')
 
             summary = query_set.aggregate(
