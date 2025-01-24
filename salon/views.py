@@ -345,8 +345,6 @@ class SalonViewSet(viewsets.ModelViewSet):
             staff = request.user.staff
             staff_salon = staff.salon
 
-            print("staff_salon: ", staff_salon)
-
             staffs = self.get_object().staff_set.all()
             serializer = SalonStaffSerializer(staffs, many=True)
             return Response({
@@ -375,9 +373,9 @@ class SalonViewSet(viewsets.ModelViewSet):
                     salon=salon, 
                     staff_receipts__staff=request.user.staff,
                 )
+                receipts = ReceiptFilter(request.GET, queryset=receipts).qs
             
 
-            # receipts = salon.receiptmodel_set.all()
             serializer = ReceiptModelSerializer(receipts, many=True)
             return Response({
                 'status': 'success',
