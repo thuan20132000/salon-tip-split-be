@@ -4,6 +4,29 @@ from django.contrib.auth.models import User
 from salon.enums import UserRoleEnums
 # Create your models here.
 
+class SoftDeleteManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
+    
+class SoftDeleteModel(models.Model):
+    is_deleted = models.BooleanField(default=False)
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
+
+    class Meta:
+        abstract = True
+        
+    def delete(self, using=None, keep_parents=False):
+        self.is_deleted = True
+        self.save()
+    
+    def hard_delete(self):
+        super().delete()
+    
+    def restore(self):
+        self.is_deleted = False
+        self.save()
+        
 
 class Salon(models.Model):
     name = models.CharField(max_length=100)
@@ -43,7 +66,7 @@ class Role(models.Model):
         return self.title
 
 
-class Staff(models.Model):
+class Staff(SoftDeleteModel):
     GENDER_CHOICES = (
         ('M', 'Male'),
         ('F', 'Female'),
@@ -84,7 +107,7 @@ class Staff(models.Model):
                 first_name=self.first_name,
                 last_name=self.last_name or ''
             )
-            user.set_password("123456")  # Set default password as phone number
+            user.set_password(self.phone)  # Set default password as phone number
             user.save()
             self.user = user
 
@@ -93,7 +116,7 @@ class Staff(models.Model):
             self.role = role
 
         super().save(*args, **kwargs)
-
+    
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
 

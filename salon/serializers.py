@@ -175,6 +175,20 @@ class StaffSerializer(serializers.ModelSerializer):
         data['salon'] = SalonSerializer(instance.salon).data
         return data
 
+class AddStaffSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Staff
+        fields = ['first_name','phone', 'email', 'salon',]
+
+    def create(self, validated_data):
+        staff = Staff.objects.create(
+            first_name=validated_data['first_name'],
+            phone=validated_data['phone'],
+            email=validated_data['email'],
+            salon_id=validated_data['salon']
+        )
+        staff.save()
+        return staff
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(

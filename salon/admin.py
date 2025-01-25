@@ -16,7 +16,7 @@ from .models import (
 @admin.register(Staff)
 class StaffAdmin(admin.ModelAdmin):
     list_display = ('first_name', 'last_name', 'email',
-                    'phone', 'hire_date', 'is_active', 'salon','role')
+                    'phone', 'hire_date', 'is_active', 'salon','role', 'is_deleted')
     list_filter = ('is_active', 'gender', 'hire_date')
     search_fields = ('first_name', 'last_name', 'email', 'phone')
     ordering = ('-hire_date',)
@@ -24,7 +24,7 @@ class StaffAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Personal Information', {
-            'fields': ('first_name', 'last_name', 'email', 'phone', 'address', 'gender', 'date_of_birth','salon','role', 'commission_rate')
+            'fields': ('first_name', 'last_name', 'email', 'phone', 'address', 'gender', 'date_of_birth','salon','role', 'commission_rate',)
         }),
         ('Employment Details', {
             'fields': ('hire_date', 'is_active')

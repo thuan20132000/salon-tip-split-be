@@ -13,7 +13,7 @@ from django.db.models.functions import Cast
 
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
-from .serializers import UserSerializer, LoginSerializer, RegisterSerializer, StaffSerializer
+from .serializers import UserSerializer, LoginSerializer, RegisterSerializer, StaffSerializer, AddStaffSerializer
 from django.db.models.functions import TruncDate
 from services.onesignal_service import OneSignalService
 from django.contrib.auth import authenticate
@@ -52,6 +52,7 @@ from salon.enums import (
 
 import json
 
+
 class StaffFilter(django_filters.FilterSet):
     hire_date_from = django_filters.DateFilter(
         field_name="hire_date", lookup_expr='gte')
@@ -85,11 +86,10 @@ class ReceiptFilter(django_filters.FilterSet):
 
     created_at = django_filters.DateFilter(
         field_name="created_at", lookup_expr='date')
-    
+
     staff = django_filters.CharFilter(
         field_name='staff_receipts__staff', lookup_expr='exact'
     )
-    
 
     class Meta:
         model = ReceiptModel
@@ -121,12 +121,11 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
         try:
             # comment:
             staff_receipts = salon_receipt['staff_receipts']
-            
+
             notification_string = ""
             user_ids = []
             owner_id = salon_receipt['salon']['owner']
             user_ids.append(owner_id)
-            
 
             for staff_receipt in staff_receipts:
                 user_ids.append(staff_receipt['user']['id'])
@@ -134,15 +133,15 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
                     staff_receipt['user']['first_name']} - "
                 notification_string += f"Sale: ${
                     staff_receipt['service_amount']} - "
-                notification_string += f"Tip: ${staff_receipt['tip_amount']} \n"
-            
-            
+                notification_string += f"Tip: ${
+                    staff_receipt['tip_amount']} \n"
+
             user_device_ids = UserDeviceModel.objects.filter(
                 user__id__in=user_ids,
                 device_id__isnull=False
             ).values('device_id')
             device_ids = [item['device_id'] for item in user_device_ids]
-            
+
             heading = f"New receipt: {salon_receipt["payment_status"]}"
             notification = OneSignalService()
 
@@ -150,7 +149,7 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
                 heading=heading,
                 content=notification_string,
                 player_ids=device_ids)
-            
+
         except Exception as e:
             print(f"Error sending notification: {str(e)}")
             return None
@@ -171,8 +170,8 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
                     request.data.get('staff_receipts'))
                 serializer = ReceiptModelSerializer(data, many=False)
 
-                
-                self.send_create_receipt_notification(salon_receipt=serializer.data)
+                self.send_create_receipt_notification(
+                    salon_receipt=serializer.data)
 
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -201,7 +200,8 @@ class ReceiptModelViewSet(viewsets.ModelViewSet):
                     request.data.get('staff_receipts'))
                 serializer = ReceiptModelSerializer(data, many=False)
 
-                self.send_create_receipt_notification(salon_receipt=serializer.data)
+                self.send_create_receipt_notification(
+                    salon_receipt=serializer.data)
 
                 return Response({
                     'status': 'success',
@@ -370,11 +370,10 @@ class SalonViewSet(viewsets.ModelViewSet):
                 receipts = ReceiptFilter(request.GET, queryset=receipts).qs
             else:
                 receipts = ReceiptModel.objects.filter(
-                    salon=salon, 
+                    salon=salon,
                     staff_receipts__staff=request.user.staff,
                 )
                 receipts = ReceiptFilter(request.GET, queryset=receipts).qs
-            
 
             serializer = ReceiptModelSerializer(receipts, many=True)
             return Response({
@@ -636,6 +635,65 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
+    # add salon staff
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='add-staff',
+        url_name='add-staff',
+        permission_classes=[IsAuthenticated]
+    )
+    def add_staff(self, request, pk=None):
+        try:
+            salon = self.get_object()
+          
+            data = request.data.copy()
+          
+            data['salon'] = salon.id
+            serializer = AddStaffSerializer(data=data)
+            if serializer.is_valid():
+                staff = serializer.create(data)
+                return Response({
+                    'status': 'success',
+                    'message': 'Staff added successfully',
+                    # 'data': AddStaffSerializer(staff).data
+                }, status=status.HTTP_201_CREATED)
+            return Response({
+                'status': 'error',
+                'message': serializer.errors,
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # soft delete salon staff
+    @action(
+        detail=True,
+        methods=['delete'],
+        url_path='delete-staff',
+        url_name='delete-staff',
+    )
+    def delete_staff(self, request, pk=None):
+        try:
+            staff_id = request.GET.get('staff_id')
+            staff = Staff.objects.get(id=staff_id)
+            staff.delete()
+            return Response({
+                'status': 'success',
+                'message': 'Staff deleted successfully',
+                'data': None
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 class RegisterView(views.APIView):
     permission_classes = (permissions.AllowAny,)
