@@ -404,7 +404,6 @@ class SalonViewSet(viewsets.ModelViewSet):
                     receipt__payment_status=PaymentStatusEnums.PAID.value,
                     staff=request.user.staff,
                 )
-                print("staff receipts: ", staff_receipts)
 
             staff_receipts = StaffReceiptFilter(
                 request.GET, queryset=staff_receipts).qs
@@ -521,15 +520,11 @@ class SalonViewSet(viewsets.ModelViewSet):
                 )
 
             query_set = StaffReceiptFilter(request.GET, queryset=query_set).qs
-            query_set = query_set.annotate(
-                date=TruncDate('created_at')
-            )
-
+           
             grouped_receipt = query_set.values(
                 'staff_id',
                 'staff__first_name',
                 'staff__commission_rate',
-                'date',
             )
 
             grouped_receipt = grouped_receipt.annotate(
@@ -538,7 +533,7 @@ class SalonViewSet(viewsets.ModelViewSet):
                 total_turn=Count('id'),
                 service_revenue=Cast(F('total_service_amount') * F('staff__commission_rate'),
                                      DecimalField(max_digits=10, decimal_places=2))
-            ).order_by('-date')
+            )
 
             summary = query_set.aggregate(
                 total_service_amount=Sum('service_amount'),
