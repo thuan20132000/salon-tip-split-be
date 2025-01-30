@@ -13,7 +13,14 @@ from django.db.models.functions import Cast
 
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
-from .serializers import UserSerializer, LoginSerializer, RegisterSerializer, StaffSerializer, AddStaffSerializer
+from .serializers import (
+    UserSerializer,
+    LoginSerializer,
+    RegisterSerializer,
+    StaffSerializer,
+    AddStaffSerializer,
+    UpdateStaffSerializer
+)
 from django.db.models.functions import TruncDate
 from services.onesignal_service import OneSignalService
 from django.contrib.auth import authenticate
@@ -366,13 +373,13 @@ class SalonViewSet(viewsets.ModelViewSet):
             salon = self.get_object()
             if salon.owner == request.user:
                 receipts = ReceiptModel.objects.filter(
-                    salon=salon)
+                    salon=salon).distinct()
                 receipts = ReceiptFilter(request.GET, queryset=receipts).qs
             else:
                 receipts = ReceiptModel.objects.filter(
                     salon=salon,
                     staff_receipts__staff=request.user.staff,
-                )
+                ).distinct()
                 receipts = ReceiptFilter(request.GET, queryset=receipts).qs
 
             serializer = ReceiptModelSerializer(receipts, many=True)
@@ -520,7 +527,7 @@ class SalonViewSet(viewsets.ModelViewSet):
                 )
 
             query_set = StaffReceiptFilter(request.GET, queryset=query_set).qs
-           
+
             grouped_receipt = query_set.values(
                 'staff_id',
                 'staff__first_name',
@@ -635,16 +642,16 @@ class SalonViewSet(viewsets.ModelViewSet):
     @action(
         detail=True,
         methods=['post'],
-        url_path='add-staff',
+        url_path='staff',
         url_name='add-staff',
         permission_classes=[IsAuthenticated]
     )
     def add_staff(self, request, pk=None):
         try:
             salon = self.get_object()
-          
+
             data = request.data.copy()
-          
+
             data['salon'] = salon.id
             serializer = AddStaffSerializer(data=data)
             if serializer.is_valid():
@@ -653,6 +660,37 @@ class SalonViewSet(viewsets.ModelViewSet):
                     'status': 'success',
                     'message': 'Staff added successfully',
                     # 'data': AddStaffSerializer(staff).data
+                }, status=status.HTTP_201_CREATED)
+            return Response({
+                'status': 'error',
+                'message': serializer.errors,
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(
+        detail=True,
+        methods=['patch','put'],
+        url_path='update-staff',
+        url_name='update-staff',
+        permission_classes=[IsAuthenticated]
+    )
+    def update_staff(self, request, pk=None):
+        try:
+           
+            data = request.data.copy()
+            staff = Staff.objects.get(id=data['id'])
+            serializer = UpdateStaffSerializer(data=data)
+            if serializer.is_valid():
+                staff = serializer.update(staff, data)
+                return Response({
+                    'status': 'success',
+                    'message': 'Staff added successfully',
                 }, status=status.HTTP_201_CREATED)
             return Response({
                 'status': 'error',
@@ -689,6 +727,7 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
+
 
 class RegisterView(views.APIView):
     permission_classes = (permissions.AllowAny,)

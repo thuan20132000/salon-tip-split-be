@@ -178,17 +178,31 @@ class StaffSerializer(serializers.ModelSerializer):
 class AddStaffSerializer(serializers.ModelSerializer):
     class Meta:
         model = Staff
-        fields = ['first_name','phone', 'email', 'salon',]
+        fields = ['first_name','phone', 'email', 'salon','commission_rate']
 
     def create(self, validated_data):
         staff = Staff.objects.create(
             first_name=validated_data['first_name'],
             phone=validated_data['phone'],
             email=validated_data['email'],
-            salon_id=validated_data['salon']
+            salon_id=validated_data['salon'],
+            commission_rate=validated_data['commission_rate']
         )
         staff.save()
         return staff
+    
+class UpdateStaffSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Staff
+        fields = ['first_name','phone','salon','commission_rate']
+
+    def update(self, instance, validated_data):
+        instance.first_name = validated_data.get('first_name', instance.first_name)
+        instance.phone = validated_data.get('phone', instance.phone)
+        instance.salon_id = validated_data.get('salon', instance.salon_id)
+        instance.commission_rate = validated_data.get('commission_rate', instance.commission_rate)
+        instance.save()
+        return instance
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
