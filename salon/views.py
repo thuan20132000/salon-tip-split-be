@@ -642,7 +642,7 @@ class SalonViewSet(viewsets.ModelViewSet):
     @action(
         detail=True,
         methods=['post'],
-        url_path='staff',
+        url_path='add-staff',
         url_name='add-staff',
         permission_classes=[IsAuthenticated]
     )
