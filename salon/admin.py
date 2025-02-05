@@ -9,7 +9,9 @@ from .models import (
     StaffReceipt,
     Salon,
     Role,
-    UserDeviceModel
+    UserDeviceModel,
+    SalonServiceCategoryModel,
+    SalonServiceModel
 )
 
 
@@ -81,4 +83,20 @@ class UserDeviceModelAdmin(admin.ModelAdmin):
     list_display = ('user', 'device_id', 'device_type')
     search_fields = ('user', 'device_id', 'device_type')
     ordering = ('user', 'device_id', 'device_type')
+    date_hierarchy = 'created_at'
+    
+    
+@admin.register(SalonServiceCategoryModel)
+class SalonServiceCategoryModelAdmin(admin.ModelAdmin):
+    list_display = ('name', 'description')
+    search_fields = ('name', 'description')
+    ordering = ('name', 'description')
+    date_hierarchy = 'created_at'
+
+
+@admin.register(SalonServiceModel)
+class SalonServiceModelAdmin(admin.ModelAdmin):
+    list_display = ('name', 'description', 'price', 'duration')
+    search_fields = ('name', 'description', 'price', 'duration')
+    ordering = ('name', 'description', 'price', 'duration')
     date_hierarchy = 'created_at'

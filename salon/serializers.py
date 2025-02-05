@@ -4,7 +4,9 @@ from .models import (
     StaffReceipt,
     ReceiptModel,
     Salon,
-    UserDeviceModel
+    UserDeviceModel,
+    SalonServiceCategoryModel,
+    SalonServiceModel
 )
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
@@ -268,3 +270,46 @@ class UserDeviceModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserDeviceModel
         fields = '__all__'
+
+
+class SalonServiceCategoryModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalonServiceCategoryModel
+        fields = '__all__'
+
+class SalonServiceCategoryUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalonServiceCategoryModel
+        fields = ['id', 'name', 'description']
+
+    def update(self, instance, validated_data):
+        instance.name = validated_data.get('name', instance.name)
+        instance.description = validated_data.get('description', instance.description)
+        instance.save()
+        return instance
+
+class SalonServiceModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalonServiceModel
+        fields = '__all__'
+        
+class SalonServiceUpdateSerializer(serializers.ModelSerializer):
+    
+    name = serializers.CharField(required=False)
+    description = serializers.CharField(required=False)
+    price = serializers.DecimalField(required=False, max_digits=10, decimal_places=2)
+    duration = serializers.IntegerField(required=False)
+    category = serializers.PrimaryKeyRelatedField(queryset=SalonServiceCategoryModel.objects.all(), required=False)
+    
+    class Meta:
+        model = SalonServiceModel
+        fields = ['id', 'name', 'description', 'price', 'duration', 'category']
+
+    def update(self, instance, validated_data):
+        instance.name = validated_data.get('name', instance.name)
+        instance.description = validated_data.get('description', instance.description)
+        instance.price = validated_data.get('price', instance.price)
+        instance.duration = validated_data.get('duration', instance.duration)
+        instance.category_id = validated_data.get('category', instance.category.id)
+        instance.save()
+        return instance

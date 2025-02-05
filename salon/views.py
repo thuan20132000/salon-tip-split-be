@@ -13,14 +13,7 @@ from django.db.models.functions import Cast
 
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
-from .serializers import (
-    UserSerializer,
-    LoginSerializer,
-    RegisterSerializer,
-    StaffSerializer,
-    AddStaffSerializer,
-    UpdateStaffSerializer
-)
+
 from django.db.models.functions import TruncDate
 from services.onesignal_service import OneSignalService
 from django.contrib.auth import authenticate
@@ -38,7 +31,9 @@ from .models import (
     ReceiptModel,
     StaffReceipt,
     Salon,
-    UserDeviceModel
+    UserDeviceModel,
+    SalonServiceCategoryModel,
+    SalonServiceModel
 )
 from .serializers import (
     StaffSerializer,
@@ -49,7 +44,17 @@ from .serializers import (
     SalonSerializer,
     StaffLoginSerializer,
     UserDeviceModelSerializer,
-    SalonStaffSerializer
+    SalonStaffSerializer,
+    SalonServiceCategoryModelSerializer,
+    SalonServiceModelSerializer,
+    UserSerializer,
+    LoginSerializer,
+    RegisterSerializer,
+    StaffSerializer,
+    AddStaffSerializer,
+    UpdateStaffSerializer,
+    SalonServiceUpdateSerializer,
+    SalonServiceCategoryUpdateSerializer
 )
 
 from salon.enums import (
@@ -727,8 +732,193 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
+            
+    # salon service category
+    @action(detail=True, methods=['get'], url_path='service-categories', url_name='service-categories')
+    def get_service_categories(self, request, pk=None):
+        try:
+            salon = self.get_object()
+            service_categories = SalonServiceCategoryModel.objects.filter(salon=salon)
+            serializer = SalonServiceCategoryModelSerializer(service_categories, many=True)
+            
+            return Response({
+                'status': 'success',
+                'message': 'Service categories retrieved successfully',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # create salon service category
+    @action(detail=True, methods=['post'], url_path='create-service-category', url_name='create-service-category')
+    def create_service_category(self, request, pk=None):
+        try:
+            salon = self.get_object()
+            serializer = SalonServiceCategoryModelSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(salon=salon)
+                return Response({
+                    'status': 'success',
+                    'message': 'Service category created successfully',
+                    'data': serializer.data
+                }, status=status.HTTP_201_CREATED)
+            return Response({
+                'status': 'error',
+                'message': serializer.errors,
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)  
+    
+    # update salon service category
+    @action(detail=True, methods=['put'], url_path='update-service-category', url_name='update-service-category')
+    def update_service_category(self, request, pk=None):
+        try:
+            service_category_id = request.data.get('id')
+            service_category = SalonServiceCategoryModel.objects.get(id=service_category_id)
+            serializer = SalonServiceCategoryUpdateSerializer(service_category, data=request.data)
+            if serializer.is_valid():
+                serializer.update(service_category, request.data)
+                return Response({
+                    'status': 'success',
+                    'message': 'Service category updated successfully',
+                    'data': serializer.data
+                }, status=status.HTTP_200_OK)   
+            return Response({
+                'status': 'error',
+                'message': serializer.errors,
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    # delete salon service category 
+    @action(detail=True, methods=['delete'], url_path='delete-service-category', url_name='delete-service-category')
+    def delete_service_category(self, request, pk=None):
+        try:
+            service_category_id = request.GET.get('service_category_id')
+            service_category = SalonServiceCategoryModel.objects.get(id=service_category_id)
+            service_category.delete()
+            return Response({
+                'status': 'success',
+                'message': 'Service category deleted successfully',
+                'data': None
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+            
+    #   salon service
+    @action(detail=True, methods=['get'], url_path='services', url_name='services')
+    def get_services(self, request, pk=None):
+        try:
+            salon = self.get_object()
+            print("salon:: ",salon)
+            services = SalonServiceModel.objects.filter(salon=salon)
+            print("services:: ",services)   
+            serializer = SalonServiceModelSerializer(services, many=True)
+            print("serializer:: ",serializer.data)
+            return Response({
+                'status': 'success',
+                'message': 'Services retrieved successfully',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-
+    # create salon service
+    @action(detail=True, methods=['post'], url_path='create-service', url_name='create-service')
+    def create_service(self, request, pk=None):
+        try:
+            salon = self.get_object()
+            serializer = SalonServiceModelSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(salon=salon)
+                return Response({
+                    'status': 'success',
+                    'message': 'Service created successfully',
+                    'data': serializer.data
+                }, status=status.HTTP_201_CREATED)  
+            return Response({
+                'status': 'error',
+                'message': serializer.errors,
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    # update salon service
+    @action(detail=True, methods=['put'], url_path='update-service', url_name='update-service')
+    def update_service(self, request, pk=None):
+        try:
+            service_id = request.data.get('id')
+            service = SalonServiceModel.objects.get(id=service_id)
+            serializer = SalonServiceUpdateSerializer(service, data=request.data)
+            if serializer.is_valid():
+                serializer.update(service, request.data)
+                return Response({
+                    'status': 'success',
+                    'message': 'Service updated successfully',
+                    'data': serializer.data
+                }, status=status.HTTP_200_OK)       
+            return Response({
+                'status': 'error',
+                'message': serializer.errors,
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)  
+    
+    # delete salon service
+    @action(detail=True, methods=['delete'], url_path='delete-service', url_name='delete-service')
+    def delete_service(self, request, pk=None):
+        try:
+            salon = self.get_object()
+            service_id = request.GET.get('service_id')
+            service = SalonServiceModel.objects.get(id=service_id)
+            service.delete()
+            return Response({
+                'status': 'success',
+                'message': 'Service deleted successfully',
+                'data': None
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+    
 class RegisterView(views.APIView):
     permission_classes = (permissions.AllowAny,)
 
