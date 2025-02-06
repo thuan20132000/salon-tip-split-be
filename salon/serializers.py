@@ -6,7 +6,8 @@ from .models import (
     Salon,
     UserDeviceModel,
     SalonServiceCategoryModel,
-    SalonServiceModel
+    SalonServiceModel,
+    StaffSkillModel
 )
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
@@ -296,20 +297,46 @@ class SalonServiceModelSerializer(serializers.ModelSerializer):
 class SalonServiceUpdateSerializer(serializers.ModelSerializer):
     
     name = serializers.CharField(required=False)
-    description = serializers.CharField(required=False)
+    description = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     price = serializers.DecimalField(required=False, max_digits=10, decimal_places=2)
     duration = serializers.IntegerField(required=False)
-    category = serializers.PrimaryKeyRelatedField(queryset=SalonServiceCategoryModel.objects.all(), required=False)
+    is_active = serializers.BooleanField(required=False)
+    category = serializers.PrimaryKeyRelatedField(queryset=SalonServiceCategoryModel.objects.all(), required=False, allow_null=True)
     
     class Meta:
         model = SalonServiceModel
-        fields = ['id', 'name', 'description', 'price', 'duration', 'category']
+        fields = ['id', 'name', 'description', 'price', 'duration', 'is_active', 'category']
 
     def update(self, instance, validated_data):
         instance.name = validated_data.get('name', instance.name)
         instance.description = validated_data.get('description', instance.description)
         instance.price = validated_data.get('price', instance.price)
         instance.duration = validated_data.get('duration', instance.duration)
-        instance.category_id = validated_data.get('category', instance.category.id)
+        instance.category_id = validated_data.get('category', instance.category.id if instance.category else None)
+        instance.is_active = validated_data.get('is_active', instance.is_active)
         instance.save()
         return instance
+    
+class StaffSkillModelSerializer(serializers.ModelSerializer):
+
+    # skill = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = StaffSkillModel
+        fields = '__all__'
+        
+    # def get_skill(self, instance):
+    #     return SalonServiceModelSerializer(instance.skill).data
+
+
+class StaffSkillsSerializer(serializers.ModelSerializer):
+    # skills = serializers.SerializerMethodField()
+    # staff = serializers.SerializerMethodField()
+    skill = serializers.SerializerMethodField()
+    class Meta:
+        model = StaffSkillModel
+        fields = '__all__'
+    
+    def get_skill(self, instance):
+        return SalonServiceModelSerializer(instance.skill).data
+        

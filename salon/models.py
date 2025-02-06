@@ -4,6 +4,13 @@ from django.contrib.auth.models import User
 from salon.enums import UserRoleEnums
 # Create your models here.
 
+class BaseModel(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        abstract = True
+
 class SoftDeleteManager(models.Manager):
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
@@ -247,3 +254,23 @@ class SalonServiceModel(models.Model):
         ordering = ['-created_at']
 
     
+    
+
+# Staff Skill Model
+class StaffSkillModel(BaseModel):
+    staff = models.ForeignKey(Staff, on_delete=models.PROTECT, related_name='skills')
+    skill = models.ForeignKey(SalonServiceModel, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True, help_text="Check this box if the skill is active")
+    custom_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True, blank=True)
+    
+    
+    
+    def __str__(self):
+        return f"{self.staff.first_name} {self.staff.last_name} - {self.skill.name}"
+    
+    class Meta:
+        verbose_name = "Staff Skill"
+        verbose_name_plural = "Staff Skills"
+        ordering = ['-created_at']

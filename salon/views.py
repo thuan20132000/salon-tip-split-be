@@ -33,7 +33,8 @@ from .models import (
     Salon,
     UserDeviceModel,
     SalonServiceCategoryModel,
-    SalonServiceModel
+    SalonServiceModel,
+    StaffSkillModel
 )
 from .serializers import (
     StaffSerializer,
@@ -54,7 +55,9 @@ from .serializers import (
     AddStaffSerializer,
     UpdateStaffSerializer,
     SalonServiceUpdateSerializer,
-    SalonServiceCategoryUpdateSerializer
+    SalonServiceCategoryUpdateSerializer,
+    StaffSkillModelSerializer,
+    StaffSkillsSerializer
 )
 
 from salon.enums import (
@@ -680,14 +683,14 @@ class SalonViewSet(viewsets.ModelViewSet):
 
     @action(
         detail=True,
-        methods=['patch','put'],
+        methods=['patch', 'put'],
         url_path='update-staff',
         url_name='update-staff',
         permission_classes=[IsAuthenticated]
     )
     def update_staff(self, request, pk=None):
         try:
-           
+
             data = request.data.copy()
             staff = Staff.objects.get(id=data['id'])
             serializer = UpdateStaffSerializer(data=data)
@@ -732,15 +735,17 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+
     # salon service category
     @action(detail=True, methods=['get'], url_path='service-categories', url_name='service-categories')
     def get_service_categories(self, request, pk=None):
         try:
             salon = self.get_object()
-            service_categories = SalonServiceCategoryModel.objects.filter(salon=salon)
-            serializer = SalonServiceCategoryModelSerializer(service_categories, many=True)
-            
+            service_categories = SalonServiceCategoryModel.objects.filter(
+                salon=salon)
+            serializer = SalonServiceCategoryModelSerializer(
+                service_categories, many=True)
+
             return Response({
                 'status': 'success',
                 'message': 'Service categories retrieved successfully',
@@ -752,7 +757,7 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     # create salon service category
     @action(detail=True, methods=['post'], url_path='create-service-category', url_name='create-service-category')
     def create_service_category(self, request, pk=None):
@@ -776,22 +781,24 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'status': 'error',
                 'message': str(e),
                 'data': None
-            }, status=status.HTTP_400_BAD_REQUEST)  
-    
+            }, status=status.HTTP_400_BAD_REQUEST)
+
     # update salon service category
     @action(detail=True, methods=['put'], url_path='update-service-category', url_name='update-service-category')
     def update_service_category(self, request, pk=None):
         try:
             service_category_id = request.data.get('id')
-            service_category = SalonServiceCategoryModel.objects.get(id=service_category_id)
-            serializer = SalonServiceCategoryUpdateSerializer(service_category, data=request.data)
+            service_category = SalonServiceCategoryModel.objects.get(
+                id=service_category_id)
+            serializer = SalonServiceCategoryUpdateSerializer(
+                service_category, data=request.data)
             if serializer.is_valid():
                 serializer.update(service_category, request.data)
                 return Response({
                     'status': 'success',
                     'message': 'Service category updated successfully',
                     'data': serializer.data
-                }, status=status.HTTP_200_OK)   
+                }, status=status.HTTP_200_OK)
             return Response({
                 'status': 'error',
                 'message': serializer.errors,
@@ -803,13 +810,14 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
-            
-    # delete salon service category 
+
+    # delete salon service category
     @action(detail=True, methods=['delete'], url_path='delete-service-category', url_name='delete-service-category')
     def delete_service_category(self, request, pk=None):
         try:
             service_category_id = request.GET.get('service_category_id')
-            service_category = SalonServiceCategoryModel.objects.get(id=service_category_id)
+            service_category = SalonServiceCategoryModel.objects.get(
+                id=service_category_id)
             service_category.delete()
             return Response({
                 'status': 'success',
@@ -822,18 +830,18 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
-            
-            
+
     #   salon service
+
     @action(detail=True, methods=['get'], url_path='services', url_name='services')
     def get_services(self, request, pk=None):
         try:
             salon = self.get_object()
-            print("salon:: ",salon)
+            print("salon:: ", salon)
             services = SalonServiceModel.objects.filter(salon=salon)
-            print("services:: ",services)   
+            print("services:: ", services)
             serializer = SalonServiceModelSerializer(services, many=True)
-            print("serializer:: ",serializer.data)
+            print("serializer:: ", serializer.data)
             return Response({
                 'status': 'success',
                 'message': 'Services retrieved successfully',
@@ -858,7 +866,7 @@ class SalonViewSet(viewsets.ModelViewSet):
                     'status': 'success',
                     'message': 'Service created successfully',
                     'data': serializer.data
-                }, status=status.HTTP_201_CREATED)  
+                }, status=status.HTTP_201_CREATED)
             return Response({
                 'status': 'error',
                 'message': serializer.errors,
@@ -870,21 +878,22 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+
     # update salon service
     @action(detail=True, methods=['put'], url_path='update-service', url_name='update-service')
     def update_service(self, request, pk=None):
         try:
             service_id = request.data.get('id')
             service = SalonServiceModel.objects.get(id=service_id)
-            serializer = SalonServiceUpdateSerializer(service, data=request.data)
+            serializer = SalonServiceUpdateSerializer(
+                service, data=request.data)
             if serializer.is_valid():
                 serializer.update(service, request.data)
                 return Response({
                     'status': 'success',
                     'message': 'Service updated successfully',
                     'data': serializer.data
-                }, status=status.HTTP_200_OK)       
+                }, status=status.HTTP_200_OK)
             return Response({
                 'status': 'error',
                 'message': serializer.errors,
@@ -895,8 +904,8 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'status': 'error',
                 'message': str(e),
                 'data': None
-            }, status=status.HTTP_400_BAD_REQUEST)  
-    
+            }, status=status.HTTP_400_BAD_REQUEST)
+
     # delete salon service
     @action(detail=True, methods=['delete'], url_path='delete-service', url_name='delete-service')
     def delete_service(self, request, pk=None):
@@ -916,9 +925,58 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
-    
-    
-    
+
+    # staff skill
+
+    @action(detail=True, methods=['get'], url_path='staff-skills', url_name='staff-skills')
+    def get_staff_skills(self, request, pk=None):
+        try:
+            staff_id = request.GET.get('staff_id')
+            skills = StaffSkillModel.objects.filter(staff_id=staff_id)
+            serializer = StaffSkillsSerializer(skills, many=True)
+            return Response({
+                'status': 'success',
+                'message': 'Staff skills retrieved successfully',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # update staff skill
+    @action(detail=True, methods=['put'], url_path='update-staff-skill', url_name='update-staff-skill')
+    def update_staff_skill(self, request, pk=None):
+        try:
+            data = {}
+            data['staff_id'] = request.POST.get('staff_id')
+            data['skill_id'] = request.POST.get('skill_id')
+            data['custom_price'] = request.POST.get('custom_price')
+            data['id'] = request.POST.get('id')
+            data['is_active'] = request.POST.get('is_active') or False
+            
+            staff_skill, created = StaffSkillModel.objects.update_or_create(
+                id=data.get('id'),
+                defaults=data
+            )
+
+            serializer = StaffSkillsSerializer(staff_skill)
+            
+            return Response({
+                'status': 'success',
+                'message': 'Staff skill updated successfully',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
 class RegisterView(views.APIView):
     permission_classes = (permissions.AllowAny,)
 
@@ -1028,7 +1086,7 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(
+    @ action(
         detail=False,
         methods=['post'],
         url_path='register-device',
@@ -1057,7 +1115,7 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(
+    @ action(
         detail=False,
         methods=['post'],
         url_path='unregister-device',
@@ -1082,7 +1140,7 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(
+    @ action(
         detail=False,
         methods=['post'],
         url_path='send-notification',
