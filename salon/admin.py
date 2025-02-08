@@ -12,7 +12,8 @@ from .models import (
     UserDeviceModel,
     SalonServiceCategoryModel,
     SalonServiceModel,
-    StaffSkillModel
+    StaffSkillModel,
+    StaffTurnModel
 )
 
 
@@ -108,4 +109,10 @@ class StaffSkillModelAdmin(admin.ModelAdmin):
     list_display = ('staff', 'skill')
     search_fields = ('staff', 'skill')
     ordering = ('staff', 'skill')
+    date_hierarchy = 'created_at'
+
+@admin.register(StaffTurnModel)
+class StaffTurnModelAdmin(admin.ModelAdmin):
+    search_fields = ('staff', 'services', 'status', 'start_time', 'end_time')
+    ordering = ('staff', 'services', 'status', 'start_time', 'end_time')
     date_hierarchy = 'created_at'

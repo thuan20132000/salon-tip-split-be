@@ -264,13 +264,42 @@ class StaffSkillModel(BaseModel):
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True, help_text="Check this box if the skill is active")
     custom_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True, blank=True)
-    
+    custom_duration = models.IntegerField(default=0, null=True, blank=True)
+    custom_description = models.TextField(blank=True, null=True)
     
     
     def __str__(self):
-        return f"{self.staff.first_name} {self.staff.last_name} - {self.skill.name}"
+        return f"{self.staff.first_name} {self.staff.last_name} - {self.skill.name} -  {self.is_active}"
     
     class Meta:
         verbose_name = "Staff Skill"
         verbose_name_plural = "Staff Skills"
         ordering = ['-created_at']
+        
+
+
+class StaffTurnModel(BaseModel):
+    services = models.ManyToManyField(SalonServiceModel, related_name='staff_turns')
+    staff = models.ForeignKey(Staff, on_delete=models.PROTECT, related_name='staff_turns')
+    status = models.TextField(blank=True, null=True, max_length=50)
+    start_time = models.DateTimeField(blank=True, null=True)
+    end_time = models.DateTimeField(blank=True, null=True)
+    salon = models.ForeignKey(Salon, on_delete=models.PROTECT, related_name='staff_turns')
+    custom_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True, blank=True)
+    custom_duration = models.IntegerField(default=0, null=True, blank=True)
+    custom_description = models.TextField(blank=True, null=True)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True, blank=True)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True, blank=True)
+    tip_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True, blank=True)
+    note = models.TextField(blank=True, null=True)
+    receipt = models.ForeignKey(ReceiptModel, on_delete=models.PROTECT, related_name='staff_turns', null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.staff.first_name} {self.staff.last_name} - {self.services.name}"
+    
+    class Meta:
+        verbose_name = "Staff Turn"
+        verbose_name_plural = "Staff Turns"
+        ordering = ['-created_at']
+    
+    

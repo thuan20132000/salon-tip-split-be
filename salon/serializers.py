@@ -7,7 +7,8 @@ from .models import (
     UserDeviceModel,
     SalonServiceCategoryModel,
     SalonServiceModel,
-    StaffSkillModel
+    StaffSkillModel,
+    StaffTurnModel
 )
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
@@ -191,9 +192,21 @@ class AddStaffSerializer(serializers.ModelSerializer):
             salon_id=validated_data['salon'],
             commission_rate=validated_data['commission_rate']
         )
+        
+        self.add_salon_services_to_staff_skills(staff)
         staff.save()
         return staff
     
+    # add all salon services to staff skills
+    def add_salon_services_to_staff_skills(self, staff):
+        salon_services = SalonServiceModel.objects.filter(salon=staff.salon)
+        for service in salon_services:
+            StaffSkillModel.objects.create(
+                staff=staff,
+                skill=service,
+                is_active=True
+            )
+
 class UpdateStaffSerializer(serializers.ModelSerializer):
     class Meta:
         model = Staff
@@ -340,3 +353,39 @@ class StaffSkillsSerializer(serializers.ModelSerializer):
     def get_skill(self, instance):
         return SalonServiceModelSerializer(instance.skill).data
         
+class StaffTurnModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffTurnModel
+        fields = '__all__'
+        
+    
+class StaffBioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Staff
+        fields = ['id', 'first_name', 'last_name', 'phone', 'email', 'salon']
+    
+class StaffTurnServicesSerializer(serializers.ModelSerializer):
+    
+    turns = serializers.SerializerMethodField()
+    last_turn = serializers.SerializerMethodField()
+    staff = serializers.SerializerMethodField()
+    class Meta:
+        model = Staff
+        fields = ['turns','last_turn','staff']
+        
+    
+    def get_turns(self, instance):
+        return StaffTurnModelSerializer(instance.staff_turns, many=True).data
+    
+    def get_last_turn(self, instance):
+        return StaffTurnModelSerializer(instance.staff_turns.last()).data
+    
+    def get_staff(self, instance):
+        return {
+            'id': instance.id,
+            'first_name': instance.first_name,
+            'last_name': instance.last_name,
+            'phone': instance.phone,
+            'email': instance.email,
+            'skills': StaffSkillModelSerializer(instance.skills, many=True).data
+        }

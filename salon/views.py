@@ -57,7 +57,8 @@ from .serializers import (
     SalonServiceUpdateSerializer,
     SalonServiceCategoryUpdateSerializer,
     StaffSkillModelSerializer,
-    StaffSkillsSerializer
+    StaffSkillsSerializer,
+    StaffTurnServicesSerializer
 )
 
 from salon.enums import (
@@ -837,11 +838,8 @@ class SalonViewSet(viewsets.ModelViewSet):
     def get_services(self, request, pk=None):
         try:
             salon = self.get_object()
-            print("salon:: ", salon)
-            services = SalonServiceModel.objects.filter(salon=salon)
-            print("services:: ", services)
+            services = SalonServiceModel.objects.filter(salon=salon, is_active=True)
             serializer = SalonServiceModelSerializer(services, many=True)
-            print("serializer:: ", serializer.data)
             return Response({
                 'status': 'success',
                 'message': 'Services retrieved successfully',
@@ -951,22 +949,45 @@ class SalonViewSet(viewsets.ModelViewSet):
     def update_staff_skill(self, request, pk=None):
         try:
             data = {}
-            data['staff_id'] = request.POST.get('staff_id')
-            data['skill_id'] = request.POST.get('skill_id')
-            data['custom_price'] = request.POST.get('custom_price')
-            data['id'] = request.POST.get('id')
-            data['is_active'] = request.POST.get('is_active') or False
+            data['staff'] = request.data.get('staff_id')
+            data['skill'] = request.data.get('skill_id')
+            data['custom_price'] = request.data.get('custom_price')
+            data['id'] = request.data.get('id')
+            data['is_active'] = request.data.get('is_active') or False
             
-            staff_skill, created = StaffSkillModel.objects.update_or_create(
-                id=data.get('id'),
-                defaults=data
-            )
+            print("data: ", data)
+            staff_skill = StaffSkillModel.objects.get(id=data['id'])
 
-            serializer = StaffSkillsSerializer(staff_skill)
-            
+            serializer = StaffSkillsSerializer(staff_skill, data=data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    'status': 'success',
+                    'message': 'Staff skill updated successfully',
+                    'data': serializer.data
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'status': 'error',
+                    'message': serializer.errors,
+                    'data': None
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['get'], url_path='staff-turn-services', url_name='staff-turn-services')
+    def get_staff_turn_services(self, request, pk=None):
+        try:
+            salon_staffs = Staff.objects.filter(salon=self.get_object(), is_active=True)
+            serializer =  StaffTurnServicesSerializer(salon_staffs, many=True) 
+            print("serializer:: ", serializer.data)
             return Response({
                 'status': 'success',
-                'message': 'Staff skill updated successfully',
+                'message': 'Staff turn services retrieved successfully',
                 'data': serializer.data
             }, status=status.HTTP_200_OK)
         except Exception as e:
@@ -975,7 +996,6 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
-
 
 class RegisterView(views.APIView):
     permission_classes = (permissions.AllowAny,)
