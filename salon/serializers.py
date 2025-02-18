@@ -8,12 +8,13 @@ from .models import (
     SalonServiceCategoryModel,
     SalonServiceModel,
     StaffSkillModel,
-    StaffTurnModel
+    StaffTurnModel,
+    SalonSetting
 )
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
-
+from django.conf import settings
 
 class StaffSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
@@ -94,7 +95,6 @@ class UpdateReceiptModelSerializer(serializers.ModelSerializer):
                 tip_amount = staff_receipt.get('tip_amount', 0)
                 discount_price = staff_receipt.get('discount_price', 0)
                 discount_percent = staff_receipt.get('discount_percent', 0)
-                print("aaa: ",staff_id)
                 # receipt = StaffReceipt.objects.get(id=staff_receipt_id)
                 receipt, created = StaffReceipt.objects.update_or_create(
                     id=staff_receipt_id,
@@ -112,12 +112,23 @@ class UpdateReceiptModelSerializer(serializers.ModelSerializer):
 
         return self.instance
 
+class SalonSettingSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = SalonSetting
+        fields = '__all__'
+        
 
 class SalonSerializer(serializers.ModelSerializer):
     class Meta:
         model = Salon
         fields = '__all__'
         # depth = 1
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['salon_setting'] = SalonSettingSerializer(instance.salon_setting).data
+        return data
 
 
 class StaffSalonSerializer(serializers.ModelSerializer):

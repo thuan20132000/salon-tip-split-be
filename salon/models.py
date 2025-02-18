@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
 from salon.enums import UserRoleEnums
+from django.conf import settings
 # Create your models here.
 
 class BaseModel(models.Model):
@@ -53,6 +54,19 @@ class Salon(models.Model):
         verbose_name_plural = "Salons"
         ordering = ['-created_at']
 
+class SalonSetting(BaseModel):
+    salon = models.OneToOneField(Salon, on_delete=models.PROTECT, related_name='salon_setting')
+    tax_rate = models.FloatField(default=0, null=True, blank=True)
+    passcode = models.CharField(max_length=100, null=True, blank=True)
+    logo = models.ImageField(upload_to='salon_logo/', null=True, blank=True)
+    background_color = models.CharField(max_length=100, null=True, blank=True)
+    logo_url = models.CharField(max_length=255, null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.salon.name} - {self.tax_rate}"
+    
+
+    
 # class StaffRole(models.Model):
 #     title = models.CharField(max_length=100)
 #     description = models.TextField(blank=True, null=True)
@@ -188,6 +202,8 @@ class StaffReceipt(models.Model):
 
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(default=timezone.now)
+    
+    
 
     def __str__(self):
         return f"Receipt for {self.staff.first_name} {self.staff.last_name}"
@@ -293,6 +309,7 @@ class StaffTurnModel(BaseModel):
     tip_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True, blank=True)
     note = models.TextField(blank=True, null=True)
     receipt = models.ForeignKey(ReceiptModel, on_delete=models.PROTECT, related_name='staff_turns', null=True, blank=True)
+    finished_at = models.DateTimeField(blank=True, null=True)
     
     def __str__(self):
         return f"{self.staff.first_name} {self.staff.last_name} - {self.services.name}"

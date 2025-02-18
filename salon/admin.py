@@ -13,7 +13,8 @@ from .models import (
     SalonServiceCategoryModel,
     SalonServiceModel,
     StaffSkillModel,
-    StaffTurnModel
+    StaffTurnModel,
+    SalonSetting
 )
 
 
@@ -58,6 +59,8 @@ class StaffReceiptAdmin(admin.ModelAdmin):
 class StaffInline(admin.TabularInline):
     model = Staff
 
+class SalonSettingInline(admin.TabularInline):
+    model = SalonSetting
 
 @admin.register(Salon)
 class SalonAdmin(admin.ModelAdmin):
@@ -67,8 +70,10 @@ class SalonAdmin(admin.ModelAdmin):
     ordering = ('name', 'address', 'phone', 'email')
     date_hierarchy = 'created_at'
     
+    
+
     inlines = [
-        StaffInline
+        SalonSettingInline
     ]
     
     

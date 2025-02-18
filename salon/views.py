@@ -43,7 +43,6 @@ from .serializers import (
     CreateReceiptModelSerializer,
     UpdateReceiptModelSerializer,
     SalonSerializer,
-    StaffLoginSerializer,
     UserDeviceModelSerializer,
     SalonStaffSerializer,
     SalonServiceCategoryModelSerializer,
@@ -56,9 +55,9 @@ from .serializers import (
     UpdateStaffSerializer,
     SalonServiceUpdateSerializer,
     SalonServiceCategoryUpdateSerializer,
-    StaffSkillModelSerializer,
     StaffSkillsSerializer,
-    StaffTurnServicesSerializer
+    StaffTurnServicesSerializer,
+    SalonSettingSerializer
 )
 
 from salon.enums import (
@@ -489,6 +488,8 @@ class SalonViewSet(viewsets.ModelViewSet):
                 total_service_amount=Sum('service_amount'),
                 total_tip_amount=Sum('tip_amount'),
                 total_turn=Count('id'),
+                staff_id=F('staff_id'),
+                staff_name=F('staff__first_name'),
             ).order_by('-date')
 
             summary = query_set.aggregate(
@@ -955,7 +956,6 @@ class SalonViewSet(viewsets.ModelViewSet):
             data['id'] = request.data.get('id')
             data['is_active'] = request.data.get('is_active') or False
             
-            print("data: ", data)
             staff_skill = StaffSkillModel.objects.get(id=data['id'])
 
             serializer = StaffSkillsSerializer(staff_skill, data=data)
@@ -990,6 +990,53 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': 'Staff turn services retrieved successfully',
                 'data': serializer.data
             }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    @action(detail=True, methods=['get'], url_path='settings', url_name='settings')
+    def get_salon_setting(self, request, pk=None):
+        try:
+            salon = self.get_object()
+            salon_setting = salon.salon_setting
+            serializer = SalonSettingSerializer(salon_setting)
+            return Response({
+                'status': 'success',
+                'message': 'Salon setting retrieved successfully',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    @action(detail=True, methods=['put'], url_path='update-settings', url_name='update-settings')
+    def update_salon_setting(self, request, pk=None):
+        try:
+            salon = self.get_object()
+            salon_setting = salon.salon_setting
+            update_data = request.data.copy()
+            update_data['salon'] = salon.id
+            
+            serializer = SalonSettingSerializer(salon_setting, data=update_data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    'status': 'success',
+                    'message': 'Salon setting updated successfully',
+                    'data': serializer.data
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'status': 'error',
+                    'message': serializer.errors,
+                    'data': None
+                }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({
                 'status': 'error',
