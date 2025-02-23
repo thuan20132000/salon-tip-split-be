@@ -84,6 +84,11 @@ class IsSalonOwner(permissions.BasePermission):
             receipt_salon_owner == user
         )
 
+class CanViewSalonReport(permissions.BasePermission):
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        print("obj:: ", obj)
+        return bool(user and obj.owner == user)
 
 class CanViewSalonSalaryReport(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):

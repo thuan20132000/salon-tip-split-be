@@ -23,7 +23,8 @@ from salon.permissions import (
     IsSalonOwner,
     IsSalonStaff,
     CanDeleteStaffReceipt,
-    CanViewSalonSalaryReport
+    CanViewSalonSalaryReport,
+    CanViewSalonReport
 )
 
 from .models import (
@@ -97,7 +98,10 @@ class StaffViewSet(viewsets.ModelViewSet):
 
 class ReceiptFilter(django_filters.FilterSet):
 
-    created_at_range = django_filters.DateFromToRangeFilter()
+    created_at_range = django_filters.DateFromToRangeFilter(
+        field_name="created_at",
+        lookup_expr='range',
+    )
 
     created_at = django_filters.DateFilter(
         field_name="created_at", lookup_expr='date')
@@ -561,6 +565,69 @@ class SalonViewSet(viewsets.ModelViewSet):
             return Response({
                 'status': 'success',
                 'message': 'Staff revenue statistics retrieved successfully',
+                'data': grouped_receipt,
+                'summary': summary
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    # get salon revenue statistics
+    @action(
+        detail=True,
+        methods=['get'],
+        url_path='salon-revenue-statistics',
+        url_name='salon-revenue-statistics',
+        permission_classes=[IsAuthenticated, CanViewSalonReport]
+    )
+    def get_salon_revenue_statistics(self, request, pk=None):
+        try:
+            salon = self.get_object()
+            if salon.owner == request.user:
+                query_set = StaffReceipt.objects.filter(
+                    receipt__salon=salon,
+                    receipt__payment_status=PaymentStatusEnums.PAID.value,
+                ).all()
+
+            else:
+                query_set = StaffReceipt.objects.filter(
+                    receipt__salon=salon,
+                    receipt__payment_status=PaymentStatusEnums.PAID.value,
+                    staff=request.user.staff,
+                )
+            
+            query_set = StaffReceiptFilter(request.GET, queryset=query_set).qs
+            
+            # calculate total salon revenue grouped by date
+
+            grouped_receipt = query_set.annotate(
+                date=TruncDate('created_at'),
+            ).values(
+                'date',
+            )
+            
+            # Calculate totals grouped by date
+            grouped_receipt = grouped_receipt.annotate(
+                total_service_amount=Sum('service_amount'),
+                total_tip_amount=Sum('tip_amount'),
+                total_turn=Count('id')
+            ).order_by('-date')
+            
+            # Calculate summary totals
+            summary = query_set.aggregate(
+                total_service_amount=Sum('service_amount'),
+                total_tip_amount=Sum('tip_amount'), 
+                total_turn=Count('id')
+            )
+
+
+            return Response({
+                'status': 'success',
+                'message': 'Salon revenue statistics retrieved successfully',
                 'data': grouped_receipt,
                 'summary': summary
             }, status=status.HTTP_200_OK)
