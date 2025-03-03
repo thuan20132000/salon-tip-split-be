@@ -262,6 +262,35 @@ class StaffReceiptFilter(django_filters.FilterSet):
     salon = django_filters.CharFilter(
         field_name='receipt__salon', lookup_expr='exact'
     )
+    staff_id = django_filters.CharFilter(
+        field_name='staff', lookup_expr='exact'
+    )
+
+    class Meta:
+        model = StaffReceipt
+        fields = {
+            'staff': ['exact'],
+            'receipt': ['exact'],
+            'created_at': ['exact', 'gte', 'lte'],
+            'staff_id': ['exact'],
+        }
+
+
+class StaffReceiptStatisticsFilter(django_filters.FilterSet):
+
+    created_at_range = django_filters.DateFromToRangeFilter(
+        field_name="created_at",
+        lookup_expr='range',
+
+    )
+    created_at = django_filters.DateFilter(
+        field_name="created_at", lookup_expr='date')
+    salon = django_filters.CharFilter(
+        field_name='receipt__salon', lookup_expr='exact'
+    )
+    staff_id = django_filters.CharFilter(
+        field_name='staff', lookup_expr='exact'
+    )
 
     class Meta:
         model = StaffReceipt
@@ -597,13 +626,11 @@ class SalonViewSet(viewsets.ModelViewSet):
                 query_set = StaffReceipt.objects.filter(
                     receipt__salon=salon,
                     receipt__payment_status=PaymentStatusEnums.PAID.value,
-                    staff=request.user.staff,
                 )
-            
-            query_set = StaffReceiptFilter(request.GET, queryset=query_set).qs
+            # required staff_id
+            query_set = StaffReceiptStatisticsFilter(request.GET, queryset=query_set).qs
             
             # calculate total salon revenue grouped by date
-
             grouped_receipt = query_set.annotate(
                 date=TruncDate('created_at'),
             ).values(
@@ -614,16 +641,28 @@ class SalonViewSet(viewsets.ModelViewSet):
             grouped_receipt = grouped_receipt.annotate(
                 total_service_amount=Sum('service_amount'),
                 total_tip_amount=Sum('tip_amount'),
-                total_turn=Count('id')
+                total_turn=Count('id'),
+                staff_id=F('staff_id'),
+                staff__first_name=F('staff__first_name'),
+                staff__commission_rate=F('staff__commission_rate'),
+                commission_amount=Cast(
+                    Sum(F('service_amount') * F('staff__commission_rate')),
+                    DecimalField(max_digits=10, decimal_places=2)
+                ),
             ).order_by('-date')
             
+            
+           
             # Calculate summary totals
             summary = query_set.aggregate(
                 total_service_amount=Sum('service_amount'),
                 total_tip_amount=Sum('tip_amount'), 
-                total_turn=Count('id')
+                total_turn=Count('id'),
+                total_commission_amount=Cast(
+                    Sum(F('service_amount') * F('staff__commission_rate')),
+                    DecimalField(max_digits=10, decimal_places=2)
+                ),
             )
-
 
             return Response({
                 'status': 'success',
