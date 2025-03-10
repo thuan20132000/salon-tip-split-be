@@ -67,8 +67,9 @@ from salon.enums import (
 )
 
 import json
-
-
+from django.core.mail import send_mail
+from core.settings import EMAIL_HOST_USER
+from datetime import datetime
 class StaffFilter(django_filters.FilterSet):
     hire_date_from = django_filters.DateFilter(
         field_name="hire_date", lookup_expr='gte')
@@ -1149,7 +1150,93 @@ class SalonViewSet(viewsets.ModelViewSet):
                 'message': str(e),
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
+    
 
+    @action(
+        detail=True, 
+        methods=['get'], 
+        url_path='send-receipt-email', 
+        url_name='send-receipt-email'
+    )
+    def send_receipt_email(self, request, pk=None):
+        try:
+          
+            
+            salon = self.get_object()
+            staff_id = request.GET.get('staff')
+            staff = Staff.objects.get(id=staff_id)
+            if IsAdminUser and salon.owner == request.user:
+                staff_receipts = StaffReceipt.objects.filter(
+                    receipt__salon=salon,
+                    receipt__payment_status=PaymentStatusEnums.PAID.value,
+                ).all()
+           
+            staff_receipts = StaffReceiptFilter(
+                request.GET, queryset=staff_receipts).qs
+            
+           
+            # Calculate total amount
+            totals = staff_receipts.aggregate(
+                total_service_amount=Sum('service_amount'),
+                total_tip_amount=Sum('tip_amount')
+            )
+
+            # Handle None values
+            total_amount = totals.get('total_service_amount', 0)
+            total_tip = totals.get('total_tip_amount', 0)
+
+            # get total turn
+            total_turn = staff_receipts.count()
+
+            serializer = StaffReceiptSerializer(staff_receipts, many=True)
+
+            # print("serializer:: ", serializer.data)
+
+            # receipt email
+            receipt_date = request.GET.get('created_at')
+            subject = f"E-receipt from {self.get_object().name} on {receipt_date}"
+
+            message = f"{staff.first_name} Receipt Details:\n"
+            message += f"Total Service Amount: ${total_amount}\n"
+            message += f"Total Turn: {total_turn}\n"
+            message += f"Total Tip: ${total_tip}\n\n"
+            for staff_receipt in serializer.data:
+                message += f"Service Amount: ${staff_receipt['service_amount']}\n"
+                message += f"Tip Amount: ${staff_receipt['tip_amount']}\n"
+                # Parse ISO format datetime string
+                created_at = datetime.fromisoformat(staff_receipt['created_at'].replace('Z', '+00:00'))
+                # Format datetime as string
+                formatted_date = created_at.strftime('%Y-%m-%d %H:%M:%S')
+                message += f"Created At: {formatted_date}\n\n"
+        
+            # get salon owner email
+            recipient_emails = [staff.email]
+            print("recipient_emails:: ", recipient_emails)
+
+            send_mail(
+                    subject=subject,
+                    message=message,
+                    from_email=EMAIL_HOST_USER,
+                    recipient_list=recipient_emails,
+                    fail_silently=False
+                )
+
+            print("Email sent successfully")
+
+            return Response({
+                'status': 'success',
+                'message': 'Email sent successfully',
+                'data': message
+            }, status=status.HTTP_200_OK)
+                
+        except Exception as e:
+            print(f"Error sending email: {str(e)}")
+            return Response({
+                'status': 'error',
+                'message': str(e),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
 class RegisterView(views.APIView):
     permission_classes = (permissions.AllowAny,)
 
